@@ -17,10 +17,27 @@ if [ -f /.dockerenv ] || [ -d /opt/espressif/esp-idf ]; then
     export IDF_PATH="/opt/espressif/esp-idf"
     export ESP_MATTER_PATH="/opt/espressif/esp-matter"
     
+    # 🔥 Garantir que GN está no PATH
+    export PATH="/usr/local/bin:$PATH"
+    
+    # Verificar GN
+    if command -v gn &> /dev/null; then
+        echo "   GN: $(gn --version 2>/dev/null | head -1)"
+    else
+        echo -e "${YELLOW}⚠️  GN não encontrado, instalando...${NC}"
+        apt-get update -qq && apt-get install -y -qq gn ninja-build 2>/dev/null
+    fi
+    
     # Já está configurado, apenas verificar
     if [ -f "$IDF_PATH/export.sh" ]; then
         echo "📦 Carregando ESP-IDF do container..."
         source "$IDF_PATH/export.sh" 2>/dev/null
+    fi
+    
+    # Carregar Matter
+    if [ -f "$ESP_MATTER_PATH/export.sh" ]; then
+        echo "📦 Carregando ESP-Matter..."
+        source "$ESP_MATTER_PATH/export.sh" 2>/dev/null
     fi
     
 else
@@ -39,11 +56,19 @@ else
     fi
 fi
 
+# 🔥 Criar symlink para GN se necessário
+if [ -f /usr/local/bin/gn ] && [ ! -f /usr/bin/gn ]; then
+    ln -sf /usr/local/bin/gn /usr/bin/gn 2>/dev/null
+fi
+
 # Verificar se funcionou
 if command -v idf.py &> /dev/null; then
     echo -e "${GREEN}✅ Ambiente pronto!${NC}"
     echo "   IDF_PATH: $IDF_PATH"
-    echo "   Versão: $(idf.py --version 2>/dev/null | head -1)"
+    echo "   ESP_MATTER_PATH: $ESP_MATTER_PATH"
+    echo "   Versão IDF: $(idf.py --version 2>/dev/null | head -1)"
+    echo "   GN: $(gn --version 2>/dev/null | head -1)"
+    echo "   Ninja: $(ninja --version 2>/dev/null | head -1)"
 else
     echo -e "${RED}❌ Falha na configuração${NC}"
     return 1

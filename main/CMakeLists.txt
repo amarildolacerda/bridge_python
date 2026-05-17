@@ -1,3 +1,4 @@
-idf_component_register(SRCS "main.cpp" "bridge_devices.cpp"
-                    INCLUDE_DIRS "."
-                    REQUIRES nvs_flash  esp_netif esp_matter)
+idf_component_register(SRC_DIRS          "."
+                       PRIV_INCLUDE_DIRS  "." "${ESP_MATTER_PATH}/examples/common/utils")
+
+target_compile_options(${COMPONENT_LIB} PRIVATE "-DCHIP_HAVE_CONFIG_H")
