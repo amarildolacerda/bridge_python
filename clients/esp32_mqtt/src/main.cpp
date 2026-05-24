@@ -75,6 +75,27 @@ static void mark_online(const char *id)
     {
         s_devices[idx].last_seen = millis();
         s_devices[idx].online = true;
+        Serial.printf("[%s] ✅ Online: %s\n", TAG, id);
+    }
+    else
+    {
+        Serial.printf("[%s] ⚠️ Device not found, will register: %s\n", TAG, id);
+    }
+}
+
+static void ensure_device_registered(const char *id, const char *type = "auto", const char *name = nullptr)
+{
+    int idx = find_device(id);
+    if (idx < 0)
+    {
+        char default_name[64];
+        if (!name || strlen(name) == 0)
+        {
+            snprintf(default_name, sizeof(default_name), "Device_%s", id);
+            name = default_name;
+        }
+        register_device(id, type, name);
+        Serial.printf("[%s] 🔄 Auto-registered: %s (%s)\n", TAG, id, type);
     }
 }
 
@@ -122,19 +143,23 @@ public:
             std::string topic = e->Topic();
             std::string payload = e->Payload();
 
-            Serial.printf("[%s] %s -> %s\n", TAG, topic.c_str(), payload.c_str());
+            Serial.printf("[%s] 📨 %s -> %s\n", TAG, topic.c_str(), payload.c_str());
 
             if (topic == (std::string(TOPIC_PREFIX) + "/register"))
             {
                 JsonDocument doc;
                 DeserializationError err = deserializeJson(doc, payload);
-                if (err)
-                    break;
-                const char *id = doc["id"];
-                const char *type = doc["type"];
-                const char *name = doc["name"];
-                if (id && type)
-                    register_device(id, type, name);
+                if (!err)
+                {
+                    const char *id = doc["id"];
+                    const char *type = doc["type"];
+                    const char *name = doc["name"];
+                    if (id && type)
+                    {
+                        register_device(id, type, name);
+                        Serial.printf("[%s] 📝 Explicit registration: %s (%s)\n", TAG, id, type);
+                    }
+                }
                 break;
             }
 
@@ -147,10 +172,23 @@ public:
                 {
                     std::string dev_id = rest.substr(0, slash);
                     std::string suffix = rest.substr(slash + 1);
-                    if (suffix == "state")
+
+                    mark_online(dev_id.c_str());
+                    Serial.printf("[%s] ✅ Device online: %s (via %s)\n", TAG, dev_id.c_str(), suffix.c_str());
+
+                    const char *type = "auto";
+                    const char *name = dev_id.c_str();
+
+                    JsonDocument doc;
+                    if (deserializeJson(doc, payload) == DeserializationError::Ok)
                     {
-                        mark_online(dev_id.c_str());
+                        if (doc["type"].is<const char *>())
+                            type = doc["type"];
+                        if (doc["name"].is<const char *>())
+                            name = doc["name"];
                     }
+
+                    ensure_device_registered(dev_id.c_str(), type, name);
                 }
             }
             break;
@@ -183,9 +221,7 @@ static void send_broadcast()
     doc["name"] = MDNS_HOSTNAME;
     doc["mqtt_port"] = MQTT_PORT;
     doc["http_port"] = HTTP_PORT;
-
     doc["ip_sta"] = sta_ip.toString();
-    doc["ip_ap"] = ap_ip.toString();
 
     String payload;
     serializeJson(doc, payload);
@@ -240,35 +276,260 @@ static void handle_root()
     s_http.send(200, "text/html", DASHBOARD_HTML);
 }
 
-// ── wifi ─────────────────────────────────────────────────────────────────────
+// ── wifi connection management ───────────────────────────────────────────────
 
-static void wifi_init_ap()
+static bool s_sta_connected = false;
+static unsigned long s_last_sta_check = 0;
+static bool s_ap_active = false;
+
+static void stop_ap()
 {
-    Serial.printf("[%s] AP: %s\n", TAG, WIFI_AP_SSID);
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD, WIFI_AP_CHANNEL, false, WIFI_AP_MAX_CLIENTS);
-    Serial.printf("[%s] AP IP: %s\n", TAG, WiFi.softAPIP().toString().c_str());
+    if (s_ap_active)
+    {
+        WiFi.softAPdisconnect(true);
+        s_ap_active = false;
+        Serial.printf("[%s] 🔴 AP disabled (STA connected)\n", TAG);
+    }
+}
+
+static void start_ap()
+{
+    if (!s_ap_active)
+    {
+        WiFi.mode(WIFI_AP);
+        bool ap_started = WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD, WIFI_AP_CHANNEL, false, WIFI_AP_MAX_CLIENTS);
+        if (ap_started)
+        {
+            s_ap_active = true;
+            Serial.printf("[%s] 🟢 AP enabled: %s | IP: %s\n", TAG, WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
+        }
+        else
+        {
+            Serial.printf("[%s] ❌ Failed to start AP!\n", TAG);
+        }
+    }
 }
 
 static void wifi_init_sta()
 {
-    WiFi.mode(WIFI_AP_STA);
+    Serial.printf("[%s] 🔍 Initializing WiFi...\n", TAG);
 
-    WiFiManager wm;
-    wm.setConfigPortalTimeout(180);
-    wm.setTitle(DASHBOARD_TITLE);
+    WiFi.disconnect(true);
+    delay(100);
 
-    wm.setSTAStaticIPConfig(IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
+    WiFi.mode(WIFI_STA);
+    delay(100);
 
-    if (!wm.autoConnect(WM_AP_SSID, WM_AP_PASSWORD))
+    Serial.printf("[%s] 📡 Attempting to connect with saved credentials...\n", TAG);
+
+    bool connected = false;
+
+    // Primeira tentativa
+    WiFi.begin();
+
+    unsigned long start = millis();
+    while (millis() - start < STA_CONNECT_TIMEOUT_MS)
     {
-        Serial.printf("[%s] WiFiManager failed to connect, rebooting...\n", TAG);
-        delay(3000);
-        ESP.restart();
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            connected = true;
+            break;
+        }
+        delay(250);
+        Serial.print(".");
     }
-    sta_ip = WiFi.localIP();
+    Serial.println();
 
-    Serial.printf("[%s] STA connected: %s  http://%s \n", TAG, WiFi.localIP().toString().c_str(), WiFi.localIP().toString().c_str());
+    // Segunda tentativa se necessário
+    if (!connected)
+    {
+        Serial.printf("[%s] ⚠️ First attempt failed, retrying...\n", TAG);
+        WiFi.reconnect();
+
+        start = millis();
+        while (millis() - start < STA_CONNECT_TIMEOUT_MS)
+        {
+            if (WiFi.status() == WL_CONNECTED)
+            {
+                connected = true;
+                break;
+            }
+            delay(250);
+            Serial.print(".");
+        }
+        Serial.println();
+    }
+
+    // Se falhou, usa WiFiManager com timeout
+    if (!connected)
+    {
+        Serial.printf("[%s] ⚠️ Saved credentials may be invalid\n", TAG);
+        Serial.printf("[%s] 🔄 Starting WiFiManager with timeout protection...\n", TAG);
+
+        WiFi.disconnect(true);
+        delay(500);
+
+        WiFiManager wm;
+        wm.setConfigPortalTimeout(120);
+        wm.setConnectTimeout(20);
+        wm.setTitle(DASHBOARD_TITLE);
+
+        if (wm.autoConnect(WM_AP_SSID, WM_AP_PASSWORD))
+        {
+            sta_ip = WiFi.localIP();
+            s_sta_connected = true;
+            Serial.printf("[%s] ✅ WiFiManager connected! IP: %s\n", TAG, sta_ip.toString().c_str());
+            Serial.printf("[%s] 📡 RSSI: %d dBm\n", TAG, WiFi.RSSI());
+            stop_ap();
+            connected = true;
+        }
+        else
+        {
+            Serial.printf("[%s] ❌ WiFiManager failed\n", TAG);
+            s_sta_connected = false;
+            sta_ip = IPAddress(0, 0, 0, 0);
+            s_ap_active = true;
+        }
+    }
+
+    if (connected)
+    {
+        sta_ip = WiFi.localIP();
+        s_sta_connected = true;
+        Serial.printf("[%s] ✅ STA connected: %s\n", TAG, sta_ip.toString().c_str());
+        Serial.printf("[%s] 📡 RSSI: %d dBm\n", TAG, WiFi.RSSI());
+        stop_ap();
+    }
+}
+
+static void check_sta_connection()
+{
+    unsigned long now = millis();
+    if (now - s_last_sta_check < STA_RECONNECT_INTERVAL_MS)
+        return;
+    s_last_sta_check = now;
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        static int reconnect_attempts = 0;
+
+        if (s_sta_connected)
+        {
+            Serial.printf("[%s] ⚠️ STA connection lost!\n", TAG);
+            s_sta_connected = false;
+            start_ap();
+            reconnect_attempts = 0;
+        }
+
+        reconnect_attempts++;
+        Serial.printf("[%s] 🔄 Reconnection attempt %d/3...\n", TAG, reconnect_attempts);
+
+        if (reconnect_attempts >= 3)
+        {
+            Serial.printf("[%s] 🔴 Max attempts reached! Restarting WiFi...\n", TAG);
+
+            WiFi.disconnect(true);
+            delay(500);
+            WiFi.mode(WIFI_STA);
+            delay(500);
+
+            WiFi.begin();
+
+            unsigned long start = millis();
+            bool connected = false;
+            while (millis() - start < STA_CONNECT_TIMEOUT_MS)
+            {
+                if (WiFi.status() == WL_CONNECTED)
+                {
+                    connected = true;
+                    break;
+                }
+                delay(250);
+            }
+
+            if (connected)
+            {
+                sta_ip = WiFi.localIP();
+                s_sta_connected = true;
+                Serial.printf("[%s] ✅ STA reconnected! IP: %s\n", TAG, sta_ip.toString().c_str());
+                stop_ap();
+                send_broadcast();
+                reconnect_attempts = 0;
+                return;
+            }
+            else
+            {
+                Serial.printf("[%s] 🔄 Starting WiFiManager...\n", TAG);
+                WiFi.disconnect(true);
+                delay(1000);
+
+                WiFiManager wm;
+                wm.setConfigPortalTimeout(120);
+                wm.setTitle(DASHBOARD_TITLE);
+
+                if (wm.autoConnect(WM_AP_SSID, WM_AP_PASSWORD))
+                {
+                    sta_ip = WiFi.localIP();
+                    s_sta_connected = true;
+                    Serial.printf("[%s] ✅ Reconfigured! IP: %s\n", TAG, sta_ip.toString().c_str());
+                    stop_ap();
+                    send_broadcast();
+                    reconnect_attempts = 0;
+                    return;
+                }
+                else
+                {
+                    Serial.printf("[%s] ❌ Portal timeout, AP active\n", TAG);
+                    start_ap();
+                    reconnect_attempts = 0;
+                }
+            }
+        }
+        else
+        {
+            WiFi.reconnect();
+
+            unsigned long start = millis();
+            while (millis() - start < STA_CONNECT_TIMEOUT_MS)
+            {
+                if (WiFi.status() == WL_CONNECTED)
+                {
+                    sta_ip = WiFi.localIP();
+                    s_sta_connected = true;
+                    Serial.printf("[%s] ✅ STA reconnected! IP: %s\n", TAG, sta_ip.toString().c_str());
+                    stop_ap();
+                    send_broadcast();
+                    reconnect_attempts = 0;
+                    return;
+                }
+                delay(100);
+            }
+
+            Serial.printf("[%s] ⚠️ Attempt %d failed\n", TAG, reconnect_attempts);
+        }
+    }
+    else if (!s_sta_connected)
+    {
+        s_sta_connected = true;
+        sta_ip = WiFi.localIP();
+        Serial.printf("[%s] ✅ STA reconnected! IP: %s\n", TAG, sta_ip.toString().c_str());
+        stop_ap();
+    }
+}
+
+static void wifi_setup_mode()
+{
+    if (s_sta_connected && WiFi.status() == WL_CONNECTED)
+    {
+        WiFi.mode(WIFI_STA);
+        Serial.printf("[%s] 📡 Mode: STA only\n", TAG);
+    }
+    else
+    {
+        WiFi.mode(WIFI_AP);
+        Serial.printf("[%s] 📡 Mode: AP only (configuration mode)\n", TAG);
+        start_ap();
+    }
 }
 
 // ── setup / loop ─────────────────────────────────────────────────────────────
@@ -277,44 +538,69 @@ void setup()
 {
 #ifdef DISABLE_BROWNOUT
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-#endif
-
     delay(3000);
     setCpuFrequencyMhz(80);
+#endif
 
     Serial.begin(115200);
     delay(1000);
-    Serial.printf("\n[%s] ESP32 MQTT Broker v1.0\n", TAG);
-    Serial.printf("[%s] CPU freq: %d MHz\n", TAG, getCpuFrequencyMhz());
+    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("[%s] 🚀 ESP32 MQTT Bridge Broker v3.0\n", TAG);
+    Serial.printf("[%s] ⚡ CPU freq: %d MHz\n", TAG, getCpuFrequencyMhz());
+    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
     wifi_init_sta();
     delay(500);
-    wifi_init_ap();
+
+    wifi_setup_mode();
 
     s_broker.init(MQTT_PORT);
-    Serial.printf("[%s] MQTT broker on port %d\n", TAG, MQTT_PORT);
+    Serial.printf("[%s] 🔌 MQTT broker on port %d\n", TAG, MQTT_PORT);
 
     s_http.on("/", handle_root);
     s_http.on("/api/devices", handle_api_devices);
     s_http.begin();
-    Serial.printf("[%s] HTTP dashboard on port %d\n", TAG, HTTP_PORT);
-    if (MDNS.begin(MDNS_HOSTNAME))
+
+    if (s_sta_connected)
     {
-        MDNS.addService("mqtt", "tcp", MQTT_PORT);
-        MDNS.addService("http", "tcp", HTTP_PORT);
-        Serial.printf("[%s] mDNS: %s.local\n", TAG, MDNS_HOSTNAME);
-        MDNS.setInstanceName(String(DASHBOARD_TITLE));
+        Serial.printf("[%s] 🌐 HTTP dashboard: http://%s:%d\n", TAG, sta_ip.toString().c_str(), HTTP_PORT);
+    }
+    if (s_ap_active)
+    {
+        Serial.printf("[%s] 🌐 HTTP dashboard: http://%s:%d\n", TAG, WiFi.softAPIP().toString().c_str(), HTTP_PORT);
+    }
+
+    if (s_sta_connected)
+    {
+        if (MDNS.begin(MDNS_HOSTNAME))
+        {
+            MDNS.addService("mqtt", "tcp", MQTT_PORT);
+            MDNS.addService("http", "tcp", HTTP_PORT);
+            Serial.printf("[%s] 📡 mDNS: %s.local\n", TAG, MDNS_HOSTNAME);
+            MDNS.setInstanceName(String(DASHBOARD_TITLE));
+        }
     }
 
     s_udp.begin(BROADCAST_PORT);
     send_broadcast();
 
-    Serial.printf("[%s] AP: %s | MQTT: %s:%d | WEB: http://%s | mDNS: %s.local\n",
-                  TAG, WIFI_AP_SSID,
-                  WiFi.softAPIP().toString().c_str(), MQTT_PORT,
-                  WiFi.softAPIP().toString().c_str(), MDNS_HOSTNAME);
+    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("[%s] ✅ System Ready!\n", TAG);
+    if (s_sta_connected)
+    {
+        Serial.printf("[%s] 🌍 STA IP: %s\n", TAG, sta_ip.toString().c_str());
+        Serial.printf("[%s] 🔌 MQTT: %s:%d\n", TAG, sta_ip.toString().c_str(), MQTT_PORT);
+        Serial.printf("[%s] 🌐 WEB: http://%s:%d\n", TAG, sta_ip.toString().c_str(), HTTP_PORT);
+    }
+    if (s_ap_active)
+    {
+        Serial.printf("[%s] 📡 AP: %s | IP: %s\n", TAG, WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
+        Serial.printf("[%s] 🔌 MQTT: %s:%d (AP mode)\n", TAG, WiFi.softAPIP().toString().c_str(), MQTT_PORT);
+        Serial.printf("[%s] 🌐 WEB: http://%s:%d\n", TAG, WiFi.softAPIP().toString().c_str(), HTTP_PORT);
+    }
+    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
 void loop()
@@ -322,6 +608,7 @@ void loop()
     s_broker.update();
     s_http.handleClient();
     check_timeouts();
+    check_sta_connection();
 
     if (millis() - s_last_broadcast > BROADCAST_INTERVAL_MS)
     {
@@ -329,19 +616,31 @@ void loop()
         send_broadcast();
     }
 
-    static unsigned long last_print = 0;
-    if (millis() - last_print > 15000)
+    static unsigned long last_status_log = 0;
+    if (millis() - last_status_log > 30000)
     {
-        last_print = millis();
+        last_status_log = millis();
+        Serial.printf("[%s] 📊 Status: STA=%s, AP=%s, IP=%s, Devices=%d, FreeHeap=%d\n",
+                      TAG,
+                      WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected",
+                      s_ap_active ? "Active" : "Inactive",
+                      WiFi.localIP().toString().c_str(),
+                      s_device_count,
+                      ESP.getFreeHeap());
+
         if (s_device_count > 0)
         {
-            Serial.printf("[%s] Devices: %d\n", TAG, s_device_count);
+            Serial.printf("[%s] 📱 Registered devices:\n", TAG);
             for (int i = 0; i < s_device_count; i++)
             {
-                Serial.printf("  %s (%s) %s\n",
-                              s_devices[i].id, s_devices[i].type,
-                              s_devices[i].online ? "online" : "offline");
+                Serial.printf("      %d. %s (%s) - %s, last_seen: %lu ms ago\n",
+                              i + 1,
+                              s_devices[i].name,
+                              s_devices[i].type,
+                              s_devices[i].online ? "🟢 online" : "🔴 offline",
+                              millis() - s_devices[i].last_seen);
             }
         }
     }
+    delay(1);
 }
