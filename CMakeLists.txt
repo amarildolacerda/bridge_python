@@ -22,7 +22,7 @@ set(EXTRA_COMPONENT_DIRS
     "${ESP_MATTER_PATH}/components"
     ${extra_components_dirs_append})
 
-project(generic_switch)
+project(esp_matter_bridge)
 if(CONFIG_IDF_TARGET_ESP32C2)
     include(relinker)
 endif()
@@ -30,7 +30,7 @@ endif()
 idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H;-Wno-overloaded-virtual" APPEND)
 
 if (CONFIG_ENABLE_ESP_INSIGHTS_TRACE)
-    target_add_binary_data(generic_switch.elf "insights_auth_key.txt" TEXT)
+    target_add_binary_data(esp_matter_bridge.elf "insights_auth_key.txt" TEXT)
 endif()
 
 idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H" APPEND)

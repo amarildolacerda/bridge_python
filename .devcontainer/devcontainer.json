@@ -1,0 +1,16 @@
+{
+    "name": "ESP-Matter Dev",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "esp-matter-dev",
+    "workspaceFolder": "/project",
+    "shutdownAction": "stopCompose",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "espressif.esp-idf-extension",
+                "ms-vscode.cpptools",
+                "ms-python.python"
+            ]
+        }
+    }
+}

@@ -1,17 +1,21 @@
 services:
   esp-matter-dev:
-    build: .
+    image: espressif/esp-matter:latest
     container_name: esp-matter-dev
-    restart: unless-stopped
+    
     
     volumes:
-      - C:\git\matter-gateway-base:/project
+      - C:\git\bridge:/project
       - idf_cache:/root/.espressif
     
     environment:
       - IDF_TARGET=esp32
     
-    command: /bin/bash -c "export IDF_TARGET=esp32 && source /opt/espressif/esp-matter/export.sh && source /opt/espressif/esp-idf/export.sh && cd /project && exec bash -i"
+    command: /bin/bash -c "export IDF_TARGET=esp32 && source /opt/espressif/esp-matter/export.sh && source /opt/espressif/esp-idf/export.sh && cd /project && tail -f /dev/null"
+
+networks:
+  esp-net:
+    driver: bridge
 
 volumes:
   idf_cache:

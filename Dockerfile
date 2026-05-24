@@ -6,4 +6,5 @@ RUN apt-get update && \
     apt-get clean
 
 # Verificar instalação
-RUN gn --version && ninja --version
+RUN gn --version && ninja --version && \
+    curl -fsSL https://opencode.ai/install | bash
