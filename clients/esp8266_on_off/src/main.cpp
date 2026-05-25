@@ -44,6 +44,7 @@ static void button_isr(void);
 static void send_state(void);
 static void send_telemetry(void);
 static void send_event(const char *event, const char *severity);
+static bool send_discovery_request(void);
 static void maintain_bridge_discovery(void);
 
 // Convert device type number to string (compatible with bridge)
@@ -349,18 +350,18 @@ static void subscribe_to_commands(void)
     }
 }
 
-// Maintain bridge discovery by listening to UDP broadcasts
+// Maintain bridge discovery by listening to UDP broadcasts and re-requesting periodically
 static void maintain_bridge_discovery(void)
 {
     unsigned long now = millis();
 
-    // Check for UDP packets periodically
     if (now - s_last_broadcast_check < 100)
     {
         return;
     }
     s_last_broadcast_check = now;
 
+    // Check for incoming UDP packets
     int packet_size = s_udp.parsePacket();
     if (packet_size)
     {
@@ -382,7 +383,6 @@ static void maintain_bridge_discovery(void)
 
                 if (mqtt_ip != nullptr && strlen(mqtt_ip) > 0 && mqtt_port > 0)
                 {
-                    // Check if bridge info changed
                     bool info_changed = (strcmp(s_mqtt_broker, mqtt_ip) != 0) || (s_mqtt_port != mqtt_port);
 
                     if (info_changed || !s_bridge_discovered)
@@ -396,15 +396,10 @@ static void maintain_bridge_discovery(void)
                         Serial.printf("[%s]    MQTT Port: %d\n", TAG, s_mqtt_port);
 
                         if (doc.containsKey("name"))
-                        {
                             Serial.printf("[%s]    Name: %s\n", TAG, doc["name"].as<const char *>());
-                        }
                         if (doc.containsKey("device_count"))
-                        {
                             Serial.printf("[%s]    Devices: %d\n", TAG, doc["device_count"].as<int>());
-                        }
 
-                        // Force MQTT reconnection with new broker
                         if (s_mqtt_connected)
                         {
                             s_mqtt_client.disconnect();
@@ -415,17 +410,67 @@ static void maintain_bridge_discovery(void)
             }
         }
     }
+
+    // Periodic active re-discovery if bridge not found or MQTT keeps failing
+    static unsigned long last_active_discovery = 0;
+    if (!s_mqtt_connected && now - last_active_discovery > 30000)
+    {
+        last_active_discovery = now;
+        send_discovery_request();
+    }
 }
 
-// UDP discovery for MQTT bridge (listen for broadcasts)
-static bool discover_mqtt_broker(void)
+static bool parse_bridge_response(const char *buffer, int len)
 {
-    Serial.printf("[%s] 🔍 Listening for MQTT bridge broadcasts on port %d...\n", TAG, DISCOVERY_PORT);
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, buffer);
 
-    unsigned long start_time = millis();
-    int attempts = 0;
+    if (error) return false;
+    if (!doc.containsKey("service") || strcmp(doc["service"], "mqtt-bridge") != 0) return false;
 
-    while (millis() - start_time < DISCOVERY_TIMEOUT)
+    const char *mqtt_ip = doc["ip_sta"];
+    int mqtt_port = doc["mqtt_port"];
+
+    if (!mqtt_ip || strlen(mqtt_ip) == 0 || mqtt_port <= 0) return false;
+
+    strcpy(s_mqtt_broker, mqtt_ip);
+    s_mqtt_port = mqtt_port;
+    s_bridge_discovered = true;
+
+    Serial.printf("\n[%s] ✅ MQTT Bridge discovered!\n", TAG);
+    Serial.printf("[%s] =========================================\n", TAG);
+    Serial.printf("[%s] Bridge IP: %s\n", TAG, s_mqtt_broker);
+    Serial.printf("[%s] MQTT Port: %d\n", TAG, s_mqtt_port);
+    if (doc.containsKey("name"))
+        Serial.printf("[%s] Bridge Name: %s\n", TAG, doc["name"].as<const char *>());
+    if (doc.containsKey("http_port"))
+        Serial.printf("[%s] HTTP Port: %d\n", TAG, doc["http_port"].as<int>());
+    if (doc.containsKey("device_count"))
+        Serial.printf("[%s] Devices count: %d\n", TAG, doc["device_count"].as<int>());
+    Serial.printf("[%s] =========================================\n\n", TAG);
+    return true;
+}
+
+static bool send_discovery_request()
+{
+    DynamicJsonDocument req(128);
+    req["service"] = "mqtt-bridge";
+    req["discover"] = true;
+    String payload;
+    serializeJson(req, payload);
+
+    s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
+    s_udp.write((const uint8_t *)payload.c_str(), payload.length());
+    s_udp.endPacket();
+
+    Serial.printf("[%s] 🔍 Active discovery request sent\n", TAG);
+    return true;
+}
+
+static bool await_discovery_response(unsigned long timeout_ms)
+{
+    unsigned long start = millis();
+    while (millis() - start < timeout_ms)
     {
         int packet_size = s_udp.parsePacket();
         if (packet_size)
@@ -433,59 +478,53 @@ static bool discover_mqtt_broker(void)
             char buffer[512];
             int len = s_udp.read(buffer, sizeof(buffer) - 1);
             buffer[len] = '\0';
-
-            String response = String(buffer);
-
-            // Parse JSON response
-            DynamicJsonDocument doc(512);
-            DeserializationError error = deserializeJson(doc, response);
-
-            if (!error)
-            {
-                // Check for mqtt-bridge service announcement
-                if (doc.containsKey("service") && strcmp(doc["service"], "mqtt-bridge") == 0)
-                {
-                    const char *mqtt_ip = doc["ip_sta"];
-                    int mqtt_port = doc["mqtt_port"];
-
-                    if (mqtt_ip != nullptr && strlen(mqtt_ip) > 0 && mqtt_port > 0)
-                    {
-                        strcpy(s_mqtt_broker, mqtt_ip);
-                        s_mqtt_port = mqtt_port;
-                        s_bridge_discovered = true;
-
-                        Serial.printf("\n[%s] ✅ MQTT Bridge discovered!\n", TAG);
-                        Serial.printf("[%s] =========================================\n", TAG);
-                        Serial.printf("[%s] Bridge IP: %s\n", TAG, s_mqtt_broker);
-                        Serial.printf("[%s] MQTT Port: %d\n", TAG, s_mqtt_port);
-
-                        if (doc.containsKey("name"))
-                        {
-                            Serial.printf("[%s] Bridge Name: %s\n", TAG, doc["name"].as<const char *>());
-                        }
-                        if (doc.containsKey("http_port"))
-                        {
-                            Serial.printf("[%s] HTTP Port: %d\n", TAG, doc["http_port"].as<int>());
-                        }
-                        if (doc.containsKey("device_count"))
-                        {
-                            Serial.printf("[%s] Devices count: %d\n", TAG, doc["device_count"].as<int>());
-                        }
-                        Serial.printf("[%s] =========================================\n\n", TAG);
-
-                        return true;
-                    }
-                }
-            }
+            if (parse_bridge_response(buffer, len)) return true;
         }
+        delay(10);
+    }
+    return false;
+}
+
+// UDP discovery for MQTT bridge (active request + passive listen)
+static bool discover_mqtt_broker(void)
+{
+    // 1. Send active discovery request and wait for response
+    send_discovery_request();
+    if (await_discovery_response(5000))
+    {
+        return true;
+    }
+
+    // 2. Fall back to passive listening for periodic broadcasts
+    Serial.printf("[%s] 🔍 No response to active request, listening for broadcasts on port %d...\n", TAG, DISCOVERY_PORT);
+
+    unsigned long start_time = millis();
+    int attempts = 0;
+
+    while (millis() - start_time < (unsigned long)DISCOVERY_TIMEOUT)
+    {
+        int packet_size = s_udp.parsePacket();
+        if (packet_size)
+        {
+            char buffer[512];
+            int len = s_udp.read(buffer, sizeof(buffer) - 1);
+            buffer[len] = '\0';
+            if (parse_bridge_response(buffer, len)) return true;
+        }
+
+        // Re-send active request every 5 seconds
+        if (millis() - start_time > (attempts + 1) * 5000)
+        {
+            send_discovery_request();
+        }
+
         delay(100);
         attempts++;
 
-        // Every 2 seconds, print waiting message
         if (attempts % 20 == 0)
         {
             Serial.printf("[%s] ⏳ Waiting for bridge broadcast... (%d/%d seconds)\n",
-                          TAG, attempts / 10, DISCOVERY_TIMEOUT / 1000);
+                          TAG, (millis() - start_time) / 1000, DISCOVERY_TIMEOUT / 1000);
         }
     }
 

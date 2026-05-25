@@ -11,7 +11,7 @@
 #include "dashboard.h"
 
 // ── workaround brownout ──────────────────────────────────────────────────────────────
-// #define DISABLE_BROWNOUT
+#define DISABLE_BROWNOUT
 #ifdef DISABLE_BROWNOUT
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -63,7 +63,32 @@ static void register_device(const char *id, const char *type, const char *name)
 
     if (s_device_count >= WIFI_AP_MAX_CLIENTS)
     {
-        Serial.printf("[%s] Device limit reached\n", TAG);
+        int oldest = -1;
+        unsigned long oldest_age = 0;
+        unsigned long now = millis();
+        for (int i = 0; i < s_device_count; i++)
+        {
+            if (!s_devices[i].online)
+            {
+                unsigned long age = now - s_devices[i].last_seen;
+                if (age > oldest_age)
+                {
+                    oldest_age = age;
+                    oldest = i;
+                }
+            }
+        }
+        if (oldest >= 0)
+        {
+            Serial.printf("[%s] ♻️ Replacing offline device: %s\n", TAG, s_devices[oldest].id);
+            strncpy(s_devices[oldest].id, id, sizeof(s_devices[oldest].id) - 1);
+            strncpy(s_devices[oldest].type, type, sizeof(s_devices[oldest].type) - 1);
+            strncpy(s_devices[oldest].name, name ? name : id, sizeof(s_devices[oldest].name) - 1);
+            s_devices[oldest].online = true;
+            s_devices[oldest].last_seen = millis();
+            return;
+        }
+        Serial.printf("[%s] Device limit reached (all online)\n", TAG);
         return;
     }
 
@@ -194,22 +219,24 @@ public:
                     std::string dev_id = rest.substr(0, slash);
                     std::string suffix = rest.substr(slash + 1);
 
-                    // Extrai informações do payload se disponível
-                    const char *device_type = "auto";
-                    const char *device_name = dev_id.c_str();
+                    char device_type_buf[32] = "auto";
+                    char device_name_buf[64] = "";
 
                     JsonDocument doc;
                     if (deserializeJson(doc, payload) == DeserializationError::Ok)
                     {
                         if (doc["type"].is<const char *>())
-                            device_type = doc["type"];
+                            strncpy(device_type_buf, doc["type"], sizeof(device_type_buf) - 1);
                         if (doc["name"].is<const char *>())
-                            device_name = doc["name"];
+                            strncpy(device_name_buf, doc["name"], sizeof(device_name_buf) - 1);
                         else if (doc["device_id"].is<const char *>())
-                            device_name = doc["device_id"];
+                            strncpy(device_name_buf, doc["device_id"], sizeof(device_name_buf) - 1);
                         else if (doc["id"].is<const char *>())
-                            device_name = doc["id"];
+                            strncpy(device_name_buf, doc["id"], sizeof(device_name_buf) - 1);
                     }
+
+                    const char *device_type = device_type_buf;
+                    const char *device_name = device_name_buf[0] ? device_name_buf : dev_id.c_str();
 
                     // MARCA ONLINE E REGISTRA SE NECESSÁRIO
                     int idx = find_device(dev_id.c_str());
@@ -257,10 +284,8 @@ static BridgeBroker s_broker;
 static WiFiUDP s_udp;
 static unsigned long s_last_broadcast = 0;
 
-static void send_broadcast()
+static void send_response(IPAddress dest, uint16_t port)
 {
-    IPAddress ap_ip = WiFi.softAPIP();
-
     JsonDocument doc;
     doc["service"] = "mqtt-bridge";
     doc["name"] = MDNS_HOSTNAME;
@@ -272,11 +297,37 @@ static void send_broadcast()
     String payload;
     serializeJson(doc, payload);
 
-    s_udp.beginPacket(IPAddress(255, 255, 255, 255), BROADCAST_PORT);
+    s_udp.beginPacket(dest, port);
     s_udp.write((const uint8_t *)payload.c_str(), payload.length());
     s_udp.endPacket();
+}
 
-    Serial.printf("[%s] Broadcast: %s\n", TAG, payload.c_str());
+static void send_broadcast()
+{
+    send_response(IPAddress(255, 255, 255, 255), BROADCAST_PORT);
+    Serial.printf("[%s] Broadcast: %s\n", TAG, "sent");
+}
+
+static void handle_discovery_request()
+{
+    int packet_size = s_udp.parsePacket();
+    if (!packet_size)
+        return;
+
+    char buffer[256];
+    int len = s_udp.read(buffer, sizeof(buffer) - 1);
+    buffer[len] = '\0';
+
+    JsonDocument doc;
+    if (deserializeJson(doc, buffer) != DeserializationError::Ok)
+        return;
+    if (strcmp(doc["service"] | "", "mqtt-bridge") != 0)
+        return;
+    if (!doc["discover"].is<bool>() || !doc["discover"].as<bool>())
+        return;
+
+    send_response(s_udp.remoteIP(), s_udp.remotePort());
+    Serial.printf("[%s] 🔍 Responded to discovery request from %s\n", TAG, s_udp.remoteIP().toString().c_str());
 }
 
 static int recent_client_count()
@@ -655,6 +706,13 @@ void loop()
     s_http.handleClient();
     check_timeouts();
     check_sta_connection();
+
+    static unsigned long s_last_discovery_check = 0;
+    if (millis() - s_last_discovery_check > 100)
+    {
+        s_last_discovery_check = millis();
+        handle_discovery_request();
+    }
 
     if (millis() - s_last_broadcast > BROADCAST_INTERVAL_MS)
     {

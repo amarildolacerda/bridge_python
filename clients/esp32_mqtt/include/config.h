@@ -4,7 +4,7 @@
 #define WIFI_AP_SSID "ESP32-MQTT-Bridge"
 #define WIFI_AP_PASSWORD "12345678"
 #define WIFI_AP_CHANNEL 1
-#define WIFI_AP_MAX_CLIENTS 8
+#define WIFI_AP_MAX_CLIENTS 20
 
 // ── WiFi STA (managed by WiFiManager, no hardcoded creds) ───────────────────
 
@@ -14,7 +14,7 @@
 
 // ── MQTT Broker ──────────────────────────────────────────────────────────────
 #define MQTT_PORT 1883
-#define MQTT_MAX_CLIENTS 10
+#define MQTT_MAX_CLIENTS 20
 // #define MQTT_USERNAME       "bridge"
 // #define MQTT_PASSWORD       "bridge123"
 

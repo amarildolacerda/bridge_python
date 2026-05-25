@@ -4,7 +4,7 @@ services:
     container_name: esp-matter-dev
     
     ports:
-      - "8080:8080"  # Mapeia porta 8080 do container para porta 8080 do Windows
+      - "8080:8080"
         
     volumes:
       - C:\git\bridge:/project
@@ -15,6 +15,26 @@ services:
     
     command: /bin/bash -c "export IDF_TARGET=esp32 && source /opt/espressif/esp-matter/export.sh && source /opt/espressif/esp-idf/export.sh && cd /project && tail -f /dev/null"
 
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest    
+    container_name: opencode-ai
+    restart: unless-stopped
+    
+    ports:
+      - "3001:3000"  # Porta alterada para evitar conflito
+    
+    volumes:
+      - C:\git\bridge:/workspace
+      - opencode_config:/root/.config/opencode
+      - opencode_data:/root/.local/share/opencode
+    
+    # Remove o command complexo, usa apenas o padrão da imagem
+    stdin_open: true
+    tty: true
+    
+    networks:
+      - esp-net
+
 networks:
   esp-net:
     driver: bridge
@@ -22,3 +42,7 @@ networks:
 volumes:
   idf_cache:
     name: idf_cache
+  opencode_config:
+    name: opencode_config
+  opencode_data:
+    name: opencode_data
