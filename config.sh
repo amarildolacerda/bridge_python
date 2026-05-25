@@ -56,6 +56,12 @@ else
     fi
 fi
 
+# 🔥 Ativar ccache para acelerar rebuilds
+export IDF_CCACHE_ENABLE=1
+if command -v ccache &> /dev/null; then
+    echo "   ccache: $(ccache --version | head -1)"
+fi
+
 # 🔥 Criar symlink para GN se necessário
 if [ -f /usr/local/bin/gn ] && [ ! -f /usr/bin/gn ]; then
     ln -sf /usr/local/bin/gn /usr/bin/gn 2>/dev/null

@@ -161,7 +161,7 @@ bridged_device_t *device_registry_get_by_endpoint(uint16_t endpoint_id)
 
 bridged_device_t *device_registry_get_all(int *count)
 {
-    (void)count;
+    if (count) *count = s_device_count;
     return s_devices;
 }
 

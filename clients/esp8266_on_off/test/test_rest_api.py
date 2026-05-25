@@ -16,6 +16,7 @@ Uso:
 
 import argparse
 import json
+import socket
 import sys
 import urllib.request
 import urllib.error
@@ -28,6 +29,7 @@ _total = 0
 _pass = 0
 
 GREEN = "\033[92m"
+YELLOW = "\033[93m"
 RED = "\033[91m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
@@ -253,12 +255,31 @@ def run_tests(host: str, verbose: bool) -> None:
     print(f"{'='*60}\n")
 
 
+def check_network(host: str) -> None:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(2)
+        s.connect((host, 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        local_net = ".".join(local_ip.split(".")[:3])
+        target_net = ".".join(host.split(".")[:3])
+        if local_net != target_net:
+            print(f"\n  {YELLOW}[ALERTA]{RESET} Rede incompativel!")
+            print(f"  Local: {local_ip}  |  Alvo: {host}")
+            print(f"  Dispositivo parece estar em rede diferente.\n")
+            sys.exit(FAIL)
+    except Exception:
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Testa a API REST do ESP8266 On/Off")
     parser.add_argument("--host", required=True, help="Endereco IP do ESP8266")
     parser.add_argument("--verbose", "-v", action="store_true", help="Exibir detalhes")
     args = parser.parse_args()
 
+    check_network(args.host)
     run_tests(args.host, args.verbose)
     return PASS if _pass == _total else FAIL
 

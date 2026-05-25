@@ -11,8 +11,6 @@ static httpd_handle_t s_server = NULL;
 
 #define SCRATCH_BUFSIZE 8192
 
-static char s_scratch[SCRATCH_BUFSIZE];
-
 static esp_err_t register_device_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
@@ -21,19 +19,27 @@ static esp_err_t register_device_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
+    char *buf = (char *)malloc(SCRATCH_BUFSIZE);
+    if (!buf) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
+        return ESP_FAIL;
+    }
+
     int received = 0, cur_len = 0;
     while (cur_len < total_len) {
-        received = httpd_req_recv(req, s_scratch + cur_len, total_len - cur_len);
+        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
         if (received <= 0) {
+            free(buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
             return ESP_FAIL;
         }
         cur_len += received;
     }
-    s_scratch[total_len] = '\0';
+    buf[total_len] = '\0';
 
-    cJSON *root = cJSON_Parse(s_scratch);
+    cJSON *root = cJSON_Parse(buf);
     if (!root) {
+        free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
     }
@@ -43,8 +49,9 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     cJSON *name_item = cJSON_GetObjectItem(root, "name");
 
     if (!id_item || !id_item->valuestring || !type_item || !type_item->valuestring) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id or type");
         cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id or type");
         return ESP_FAIL;
     }
 
@@ -54,23 +61,26 @@ static esp_err_t register_device_handler(httpd_req_t *req)
 
     device_type_t type = device_type_from_string(type_str);
     if (type == DEVICE_TYPE_UNKNOWN) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "unsupported device type");
         cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "unsupported device type");
         return ESP_FAIL;
     }
 
     int slot = device_registry_register(id, type, name);
     if (slot < 0) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "registry full");
         cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "registry full");
         return ESP_FAIL;
     }
 
     esp_err_t err = bridge_add_device(id, type, name);
     if (err != ESP_OK) {
         device_registry_remove_device(id);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "bridge add failed");
         cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "bridge add failed");
         return ESP_FAIL;
     }
 
@@ -88,6 +98,7 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     cJSON_Delete(root);
 
     ESP_LOGI(TAG, "Device registered: %s (type: %s, ep: %d)", id, type_str, ep_id);
+    free(buf);
     return ESP_OK;
 }
 
@@ -99,27 +110,36 @@ static esp_err_t device_state_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
+    char *buf = (char *)malloc(SCRATCH_BUFSIZE);
+    if (!buf) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
+        return ESP_FAIL;
+    }
+
     int received = 0, cur_len = 0;
     while (cur_len < total_len) {
-        received = httpd_req_recv(req, s_scratch + cur_len, total_len - cur_len);
+        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
         if (received <= 0) {
+            free(buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
             return ESP_FAIL;
         }
         cur_len += received;
     }
-    s_scratch[total_len] = '\0';
+    buf[total_len] = '\0';
 
-    cJSON *root = cJSON_Parse(s_scratch);
+    cJSON *root = cJSON_Parse(buf);
     if (!root) {
+        free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
     }
 
     cJSON *id_item = cJSON_GetObjectItem(root, "id");
     if (!id_item || !id_item->valuestring) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
         cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
         return ESP_FAIL;
     }
 
@@ -159,6 +179,7 @@ static esp_err_t device_state_handler(httpd_req_t *req)
     free((void *)resp_str);
     cJSON_Delete(resp);
     cJSON_Delete(root);
+    free(buf);
 
     return ESP_OK;
 }
@@ -184,22 +205,26 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     if (!found) {
         int total_len = req->content_len;
         if (total_len > 0 && total_len < SCRATCH_BUFSIZE) {
-            int received = 0, cur_len = 0;
-            while (cur_len < total_len) {
-                received = httpd_req_recv(req, s_scratch + cur_len, total_len - cur_len);
-                if (received <= 0) break;
-                cur_len += received;
-            }
-            s_scratch[total_len] = '\0';
-
-            cJSON *root = cJSON_Parse(s_scratch);
-            if (root) {
-                cJSON *id_item = cJSON_GetObjectItem(root, "id");
-                if (id_item && id_item->valuestring) {
-                    strncpy(id_str, id_item->valuestring, sizeof(id_str) - 1);
-                    found = true;
+            char *buf = (char *)malloc(SCRATCH_BUFSIZE);
+            if (buf) {
+                int received = 0, cur_len = 0;
+                while (cur_len < total_len) {
+                    received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
+                    if (received <= 0) break;
+                    cur_len += received;
                 }
-                cJSON_Delete(root);
+                buf[total_len] = '\0';
+
+                cJSON *root = cJSON_Parse(buf);
+                if (root) {
+                    cJSON *id_item = cJSON_GetObjectItem(root, "id");
+                    if (id_item && id_item->valuestring) {
+                        strncpy(id_str, id_item->valuestring, sizeof(id_str) - 1);
+                        found = true;
+                    }
+                    cJSON_Delete(root);
+                }
+                free(buf);
             }
         }
     }
@@ -289,7 +314,7 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
     int count = 0;
     bridged_device_t *devices = device_registry_get_all(&count);
 
-    for (int i = 0; i < MAX_BRIDGED_DEVICES; i++) {
+    for (int i = 0; i < count; i++) {
         if (devices[i].registered) {
             cJSON *item = cJSON_CreateObject();
             cJSON_AddStringToObject(item, "id", devices[i].id);

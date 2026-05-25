@@ -31,11 +31,14 @@ Bridge Matter para integrar dispositivos ESP8266 (WiFi) à Alexa via Matter, usa
 | ...      | ...                  | ...                                |
 
 Cada dispositivo bridgeado pode ter diferentes clusters dependendo do tipo:
-- **OnOffLight**: On/Off cluster
-- **TemperatureSensor**: Temperature Measurement cluster
-- **HumiditySensor**: Relative Humidity Measurement cluster
-- **ContactSensor**: BooleanState cluster
-- **DimmableLight**: On/Off + Level Control clusters
+- **OnOffLight** (onoff): On/Off cluster
+- **DimmableLight** (dimmable): On/Off + Level Control clusters
+- **TemperatureSensor** (temperature): Temperature Measurement cluster
+- **HumiditySensor** (humidity): Relative Humidity Measurement cluster
+- **ContactSensor** (contact): BooleanState cluster
+- **OccupancySensor** (occupancy): Occupancy Sensing cluster
+- **LightSensor** (light_sensor): Illuminance Measurement cluster
+- **Tanque** (tanque): data-only, sem endpoint Matter
 
 ## 3. Comunicação WiFi (ESP32 ↔ ESP8266)
 
@@ -48,19 +51,25 @@ O ESP32 roda um servidor HTTP leve. ESP8266s fazem POST com seu estado.
 ```
 POST /api/device/register
   Body: { "id": "esp8266_1", "type": "onoff", "name": "Luz Sala" }
+  Response: { "status": "ok", "endpoint_id": 2 }
 
-POST /api/device/{id}/state
-  Body: { "on": true/false }        # para OnOff
-  Body: { "temperature": 23.5 }     # para sensor
-  Body: { "humidity": 60 }          # para umidade
-  Body: { "contact": true/false }   # para contato
+POST /api/device/state
+  Body: { "id": "esp8266_1", "on": true }
+  Body: { "id": "esp8266_1", "temperature": 23.5, "humidity": 60 }
+  Body: { "id": "esp8266_1", "contact": true }
 
-GET  /api/device/{id}/state
-  Response: { "on": true, ... }
+GET  /api/device/commands?id=esp8266_1
+  Response: { "commands": [{"cluster":"onoff","command":"set_onoff","data":"1"}] }
 
-GET  /api/device/{id}/commands
-  Response: { "commands": [...] }  # comandos pendentes do Matter para ESP8266
-  (Long-poll ou pooling periódico)
+POST /api/device/commands
+  Body: { "id": "esp8266_1" }
+  Response: { "commands": [...] }
+
+GET  /api/device/info?id=esp8266_1
+  Response: { "id":"...", "name":"...", "type":"onoff", "endpoint_id":2, "online":true }
+
+GET  /api/devices
+  Response: { "devices": [...] }
 ```
 
 #### Alternativa: **MQTT**
@@ -76,9 +85,9 @@ GET  /api/device/{id}/commands
 |--------------------------|----------------------------------------------|
 | `app_main.cpp`           | Setup Matter, loops principal                |
 | `app_bridge.cpp/h`       | Lógica do bridge: criar endpoints bridgeados |
-| `app_wifi_server.cpp/h`  | Servidor HTTP WiFi para ESP8266s             |
+| `app_wifi_server.cpp/h`  | Servidor HTTP REST para ESP8266s             |
 | `app_device_registry.cpp/h` | Registro e estado dos dispositivos       |
-| `app_driver.cpp/h`       | Drivers existentes (adaptar)                 |
+| `app_driver.cpp`         | Stub (sem hardware local no bridge)          |
 | `app_priv.h`             | Definições compartilhadas                    |
 
 ## 5. Fluxo de Funcionamento
@@ -95,45 +104,46 @@ GET  /api/device/{id}/commands
 1. ESP8266 conecta no WiFi
 2. Faz POST `/api/device/register` com seu tipo
 3. ESP32 cria dinamicamente um endpoint Bridged Device no Matter
-4. ESP8266 envia atualizações via POST `/api/device/{id}/state`
+4. ESP8266 envia atualizações via POST `/api/device/state` com `{"id":"...", "on":true}`
 5. ESP32 atualiza os atributos Matter correspondentes
 
 ### 5.3 Alexa controla dispositivo
 1. Alexa envia comando Matter (ex: On/Off)
 2. Attribute update callback no ESP32 é disparado
-3. ESP32 atualiza estado interno
-4. ESP32 expõe o comando para o ESP8266 buscar (GET `/api/device/{id}/commands`)
+3. ESP32 enfileira comando pendente no device registry
+4. ESP8266 faz polling GET `/api/device/commands?id=...` e coleta o comando
 5. ESP8266 executa o comando
 
 ## 6. Implementação por Etapas
 
 ### ✅ Etapa 0: Configuração do ambiente (concluída)
 - Docker + VSCode devcontainer configurado
-- Projeto base `generic_switch` compilando
+- Projeto compilando com ESP-Matter e ESP-IDF
 
-### 🔲 Etapa 1: Servidor HTTP no ESP32
-- Implementar servidor REST básico
-- Endpoints de registro e estado
-- Testar com curl/Postman via WiFi
+### ✅ Etapa 1: Servidor HTTP no ESP32 (concluída)
+- Servidor REST implementado em `app_wifi_server.cpp`
+- Endpoints: register, state, commands, info, devices
+- Porta 80, `esp_http_server`
 
-### 🔲 Etapa 2: Device Registry
-- Estrutura de dados para múltiplos dispositivos
-- Mapeamento tipo → clusters Matter
-- Gerenciamento de IDs
+### ✅ Etapa 2: Device Registry (concluída)
+- Array estático thread-safe com mutex
+- 8 tipos de dispositivo mapeados para Matter
+- lookup por ID ou endpoint_id
 
-### 🔲 Etapa 3: Bridge Matter (Aggregator)
-- Substituir `generic_switch` por `aggregator`
-- Criar endpoints `bridged_device` dinamicamente
-- Mapear atributos WiFi → clusters Matter
+### ✅ Etapa 3: Bridge Matter Aggregator (concluída)
+- Node Matter com endpoint Aggregator
+- Bridged devices criados dinamicamente via `esp_matter_bridge::create_device()`
+- Atributos WiFi → clusters Matter mapeados em `bridge_update_matter_state()`
 
-### 🔲 Etapa 4: Comunicação bidirecional
-- Pooling de comandos pelos ESP8266s
-- Ou WebSocket para comando em tempo real
+### ✅ Etapa 4: Comunicação bidirecional (concluída)
+- Polling de comandos pelos ESP8266s via `GET /api/device/commands`
+- Comandos enfileirados em `device_registry_add_command()`
+- Fila de até 16 comandos por dispositivo
 
-### 🔲 Etapa 5: Firmware ESP8266
-- Cliente WiFi
-- POST de estado para o bridge
-- GET/Poll de comandos
+### ✅ Etapa 5: Firmware ESP8266 (concluída)
+- Cliente MQTT no `esp8266_on_off` com descoberta UDP
+- Página web com botões Ligar/Desligar/Inverter
+- API REST local no ESP8266: `/api/on`, `/api/off`, `/api/toggle`, `/api/state`
 
 ### 🔲 Etapa 6: Integração Alexa
 - Commissioning Matter na Alexa
@@ -164,10 +174,13 @@ idf.py build
 # Monitor serial
 idf.py monitor
 
-# Chip-Tool (commissioning)
+# Chip-Tool (commissioning via WiFi)
 chip-tool pairing onnetwork 0x1234 20202021
 
-# Chip-Tool (controle OnOff)
+# Chip-Tool (controle OnOff - endpoint 2 = primeiro bridged device)
 chip-tool onoff on 0x1234 2
 chip-tool onoff off 0x1234 2
+
+# Chip-Tool (ler temperatura - endpoint 3)
+chip-tool temperaturmeasurement read measured-value 0x1234 3
 ```

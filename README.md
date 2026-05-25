@@ -1,89 +1,77 @@
-# Generic Switch
+# ESP-Matter Bridge
 
-This example creates a Generic Switch device using the ESP
-Matter data model.
-This example demonstrates the use of few optional data model elements like :
-- Taglist Feature of Descriptor Cluster : used to disambiguate sibling endpoints where two or more sibling
-  endpoints have an overlap in the supported device types with each such endpoint having a unique TagList.
+Bridge Matter para integrar dispositivos ESP8266 (WiFi) à Alexa via Matter, usando um ESP32 como dispositivo bridge.
 
-
-See the [docs](https://docs.espressif.com/projects/esp-matter/en/latest/esp32/developing.html) for more information about building and flashing the firmware.
-
-## 1. Additional Environment Setup
-
-### 1.1 Building the firmware
-
-There are two types of switches in the example which can be configured
-through menuconfig:
-
-- idf.py menuconfig -> Demo -> Generic Switch Type
-- To use latching switch, enable `GENERIC_SWITCH_TYPE_LATCHING`.
-- To use a momentary switch, enable `GENERIC_SWITCH_TYPE_MOMENTARY`.
-- By default momentary switch i.e `GENERIC_SWITCH_TYPE_MOMENTARY` is enabled.
-
-### 1.2 Enabling insights (Optional)
-
-Follow the steps mentioned [here](https://docs.espressif.com/projects/esp-matter/en/latest/esp32/insights.html)
-
-## 2.Commissioning and Control
--   Commission the device with ``discriminator: 3840``and `` passcode: 20202021``
-
-    ```
-    chip-tool pairing ble-wifi 0x7283 [ssid] [password] 20202021 3840
-    ```
-### 2.1 Using the TagList Feature
-
-To read the taglist of the Descriptor cluster execute the command given below.
+## Arquitetura
 
 ```
-chip-tool descriptor read tag-list 0x7283 1
+┌─────────────────┐     WiFi     ┌──────────────────────┐    Matter     ┌─────────┐
+│  ESP8266 #1     │◄───────────►│  ESP32 (Bridge)       │◄────────────►│  Alexa   │
+│  (sensor/ator)  │             │                        │              │         │
+└─────────────────┘             │  - REST API (porta 80) │              └─────────┘
+                                │  - Bridge Matter       │
+┌─────────────────┐             │  - Aggregator          │
+│  ESP8266 #N     │◄───────────►│  - Device Registry     │
+│  (sensor/ator)  │             └──────────────────────┘
+└─────────────────┘
 ```
 
-## 3. Post Commissioning Setup
+## REST API (ESP32 → ESP8266)
 
-This should be followed by: Commission the generic switch device
--   Turn on chip-tool interactive mode.	``./chip-tool interactive start``
--   By default momentary switch is enabled so subscribe to long-press event via chip-tool.
-    ``switch subscribe-event long-press <min-interval> <max-interval> <destination-id> <endpoint-id>``
--   `Double press the boot button` on device so that client will receive event after max-interval.
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/api/device/register` | Registra dispositivo `{"id","type","name"}` |
+| `POST` | `/api/device/state` | Atualiza estado `{"id","on":true,...}` |
+| `GET` | `/api/device/commands?id=X` | Poll de comandos pendentes do Matter |
+| `POST` | `/api/device/commands` | Poll via body `{"id":"X"}` |
+| `GET` | `/api/device/info?id=X` | Dados do dispositivo |
+| `GET` | `/api/devices` | Lista todos os dispositivos |
 
-### 3.1 Latching switch
+## Device Types Suportados
 
-Following are latching switch events mapped with boot button on device.
+| Tipo | Matter | Clusters |
+|------|--------|----------|
+| `onoff` | OnOff Light (0x0100) | On/Off |
+| `dimmable` | Dimmable Light (0x0101) | On/Off + Level Control |
+| `temperature` | Temperature Sensor (0x0302) | Temperature Measurement |
+| `humidity` | Humidity Sensor (0x0307) | Relative Humidity Measurement |
+| `contact` | Contact Sensor (0x0015) | BooleanState |
+| `occupancy` | Occupancy Sensor (0x0107) | Occupancy Sensing |
+| `light_sensor` | Light Sensor (0x0106) | Illuminance Measurement |
+| `tanque` | — (data only) | Sem endpoint Matter |
 
--   `Double Press` -----------> `switch-latched`
+## Commissioning
 
-### 3.2 Momentary switch
+```
+chip-tool pairing onnetwork 0x1234 20202021
+chip-tool onoff on 0x1234 2
+chip-tool onoff off 0x1234 2
+```
 
-Following are momentary switch events mapped with boot button on device.
+- Setup PIN: `20202021`
+- Discriminator: `3840`
 
--   `Button Press Down` 		    -----------> `initial-pressed`
--   `Button Press Up ( Release )`	    -----------> `short-release`
--   `Button Long Press ( 5 sec )` 	    -----------> `long-pressed`
--   `Button Press Up ( Long Release )`  -----------> `long-release`
--   `Button Press Repeat` 		    -----------> `multipress-ongoing`
--   `Button Press Repeat Done` 	    -----------> `multipress-completed`
+## Estrutura do Projeto
 
-## 3. Device Performance
+```
+main/
+├── app_main.cpp              # Entry point, init
+├── app_bridge.cpp/h          # Lógica do bridge Matter
+├── app_wifi_server.cpp/h     # Servidor HTTP REST
+├── app_device_registry.cpp/h # Registro de dispositivos
+├── app_driver.cpp            # Stub (sem hardware local)
+└── app_priv.h                # Definições compartilhadas
 
-### 3.1 Memory usage
+clients/
+└── esp8266_on_off/           # Firmware ESP8266 (on/off)
+    ├── src/main.cpp          # WiFi, MQTT, REST, web page
+    ├── include/config.h      # Configuração do dispositivo
+    └── test/                 # Testes da API REST
+```
 
-The following is the Memory and Flash Usage.
+## Compilar
 
--   `Bootup` == Device just finished booting up. Device is not
-    commissionined or connected to wifi yet.
--   `After Commissioning` == Device is conneted to wifi and is also
-    commissioned and is rebooted.
--   device used: esp32c3_devkit_m
--   tested on:
-    [4881109](https://github.com/espressif/esp-matter/commit/4881109ce26c92e547ca11d6f022d2c9f908834e)
-    (2022-12-15)
-
-|                         | Bootup | After Commissioning |
-|:-                       |:-:     |:-:                  |
-|**Free Internal Memory** |94KB   |110KB                |
-
-**Flash Usage**: Firmware binary size: 1.24MB
-
-This should give you a good idea about the amount of free memory that is
-available for you to run your application's code.
+```bash
+idf.py build
+idf.py monitor
+```

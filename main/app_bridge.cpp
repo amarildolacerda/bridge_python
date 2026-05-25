@@ -269,19 +269,6 @@ esp_err_t bridge_update_matter_state(const char *id, const char *key, const char
                                              IlluminanceMeasurement::Attributes::MeasuredValue::Id, &val);
     }
 
-    if (strcmp(key, "level") == 0) {
-        ESP_LOGI(TAG, "Device %s level: %s%%", id, value);
-        return ESP_OK;
-    }
-    if (strcmp(key, "status") == 0) {
-        ESP_LOGI(TAG, "Device %s status: %s", id, value);
-        return ESP_OK;
-    }
-    if (strcmp(key, "distance_cm") == 0) {
-        ESP_LOGI(TAG, "Device %s distance: %scm", id, value);
-        return ESP_OK;
-    }
-
     ESP_LOGW(TAG, "Unknown state key: %s for device %s", key, id);
     return ESP_ERR_INVALID_ARG;
 }

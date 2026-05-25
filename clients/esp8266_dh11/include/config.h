@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
-#define DEVICE_ID "esp8266_living_room"
-#define DEVICE_NAME "Luz Sala"
+#define DEVICE_ID "esp8266_dht11_sala"
+#define DEVICE_NAME "Temperatura Sala"
 
 #define DEVICE_TYPE_ONOFF 1
 #define DEVICE_TYPE_TEMPERATURE 2
@@ -10,7 +10,7 @@
 #define DEVICE_TYPE_OCCUPANCY 4
 #define DEVICE_TYPE_DIMMABLE 5
 
-#define DEVICE_TYPE DEVICE_TYPE_ONOFF
+#define DEVICE_TYPE DEVICE_TYPE_TEMPERATURE
 
 #define STATE_UPDATE_INTERVAL 5000
 #define TELEMETRY_INTERVAL 30000
@@ -29,6 +29,7 @@
 
 #if DEVICE_TYPE == DEVICE_TYPE_TEMPERATURE
 #define DHT_PIN 4
+#define DHT_TYPE DHT11
 #endif
 
 #define LED_PIN 2
