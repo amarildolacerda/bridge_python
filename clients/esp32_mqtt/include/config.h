@@ -19,7 +19,7 @@
 // #define MQTT_PASSWORD       "bridge123"
 
 // ── Topic Prefix ─────────────────────────────────────────────────────────────
-#define TOPIC_PREFIX "espbridge"
+#define TOPIC_PREFIX "mqtt-bridge"
 
 // ── HTTP Dashboard ────────────────────────────────────────────────────────────
 #define HTTP_PORT 80
@@ -28,7 +28,7 @@
 // ── Broadcast Discovery ───────────────────────────────────────────────────────
 #define BROADCAST_PORT 5000
 #define BROADCAST_INTERVAL_MS 10000
-#define MDNS_HOSTNAME "espbridge"
+#define MDNS_HOSTNAME "mqtt_bridge"
 
 // ── Timeouts ─────────────────────────────────────────────────────────────────
 #define DEVICE_TIMEOUT_MS 60000

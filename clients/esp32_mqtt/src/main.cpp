@@ -10,8 +10,8 @@
 #include "config.h"
 #include "dashboard.h"
 
-// ── workaround brownout ──────────────────────────────────────────────────────
-#define DISABLE_BROWNOUT
+// ── workaround brownout ──────────────────────────────────────────────────────────────
+// #define DISABLE_BROWNOUT
 #ifdef DISABLE_BROWNOUT
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -20,7 +20,7 @@
 static const char *TAG = "mqtt-bridge";
 IPAddress sta_ip;
 
-// ── device registry ──────────────────────────────────────────────────────────
+// ── device registry ──────────────────────────────────────────────────────────────────
 
 typedef struct
 {
@@ -49,10 +49,18 @@ static void register_device(const char *id, const char *type, const char *name)
     int idx = find_device(id);
     if (idx >= 0)
     {
+        // Atualiza dispositivo existente
+        strncpy(s_devices[idx].type, type, sizeof(s_devices[idx].type) - 1);
+        if (name && strlen(name) > 0)
+        {
+            strncpy(s_devices[idx].name, name, sizeof(s_devices[idx].name) - 1);
+        }
         s_devices[idx].last_seen = millis();
         s_devices[idx].online = true;
+        Serial.printf("[%s] 🔄 Updated: %s (%s)\n", TAG, id, type);
         return;
     }
+
     if (s_device_count >= WIFI_AP_MAX_CLIENTS)
     {
         Serial.printf("[%s] Device limit reached\n", TAG);
@@ -65,7 +73,7 @@ static void register_device(const char *id, const char *type, const char *name)
     strncpy(d->name, name ? name : id, sizeof(d->name) - 1);
     d->online = true;
     d->last_seen = millis();
-    Serial.printf("[%s] Registered: %s (%s)\n", TAG, id, type);
+    Serial.printf("[%s] ✅ Registered: %s (%s) as '%s'\n", TAG, id, type, d->name);
 }
 
 static void mark_online(const char *id)
@@ -79,7 +87,9 @@ static void mark_online(const char *id)
     }
     else
     {
-        Serial.printf("[%s] ⚠️ Device not found, will register: %s\n", TAG, id);
+        // REGISTRA AUTOMATICAMENTE quando dispositivo publica
+        Serial.printf("[%s] 🔄 Auto-registering device: %s\n", TAG, id);
+        register_device(id, "auto", id);
     }
 }
 
@@ -107,12 +117,12 @@ static void check_timeouts()
         if (s_devices[i].online && (now - s_devices[i].last_seen > DEVICE_TIMEOUT_MS))
         {
             s_devices[i].online = false;
-            Serial.printf("[%s] Offline: %s\n", TAG, s_devices[i].id);
+            Serial.printf("[%s] ❌ Offline: %s\n", TAG, s_devices[i].id);
         }
     }
 }
 
-// ── broker subclass ──────────────────────────────────────────────────────────
+// ── broker subclass ──────────────────────────────────────────────────────────────────
 
 class BridgeBroker : public sMQTTBroker
 {
@@ -145,6 +155,7 @@ public:
 
             Serial.printf("[%s] 📨 %s -> %s\n", TAG, topic.c_str(), payload.c_str());
 
+            // Registro explícito via tópico específico
             if (topic == (std::string(TOPIC_PREFIX) + "/register"))
             {
                 JsonDocument doc;
@@ -153,16 +164,26 @@ public:
                 {
                     const char *id = doc["id"];
                     const char *type = doc["type"];
-                    const char *name = doc["name"];
+                    const char *name = doc["name"] | doc["device_id"] | id;
                     if (id && type)
                     {
                         register_device(id, type, name);
                         Serial.printf("[%s] 📝 Explicit registration: %s (%s)\n", TAG, id, type);
                     }
+                    else if (id)
+                    {
+                        register_device(id, "auto", name);
+                        Serial.printf("[%s] 📝 Explicit registration (auto type): %s\n", TAG, id);
+                    }
+                }
+                else
+                {
+                    Serial.printf("[%s] ❌ Failed to parse register JSON\n", TAG);
                 }
                 break;
             }
 
+            // Processa mensagens em tópicos do bridge
             std::string prefix = std::string(TOPIC_PREFIX) + "/";
             if (topic.substr(0, prefix.size()) == prefix)
             {
@@ -173,22 +194,46 @@ public:
                     std::string dev_id = rest.substr(0, slash);
                     std::string suffix = rest.substr(slash + 1);
 
-                    mark_online(dev_id.c_str());
-                    Serial.printf("[%s] ✅ Device online: %s (via %s)\n", TAG, dev_id.c_str(), suffix.c_str());
-
-                    const char *type = "auto";
-                    const char *name = dev_id.c_str();
+                    // Extrai informações do payload se disponível
+                    const char *device_type = "auto";
+                    const char *device_name = dev_id.c_str();
 
                     JsonDocument doc;
                     if (deserializeJson(doc, payload) == DeserializationError::Ok)
                     {
                         if (doc["type"].is<const char *>())
-                            type = doc["type"];
+                            device_type = doc["type"];
                         if (doc["name"].is<const char *>())
-                            name = doc["name"];
+                            device_name = doc["name"];
+                        else if (doc["device_id"].is<const char *>())
+                            device_name = doc["device_id"];
+                        else if (doc["id"].is<const char *>())
+                            device_name = doc["id"];
                     }
 
-                    ensure_device_registered(dev_id.c_str(), type, name);
+                    // MARCA ONLINE E REGISTRA SE NECESSÁRIO
+                    int idx = find_device(dev_id.c_str());
+                    if (idx < 0)
+                    {
+                        // Registra automaticamente
+                        register_device(dev_id.c_str(), device_type, device_name);
+                        Serial.printf("[%s] 🔄 Auto-registered: %s (via %s)\n", TAG, dev_id.c_str(), suffix.c_str());
+                    }
+                    else
+                    {
+                        // Atualiza nome/tipo se veio no payload
+                        if (strcmp(device_type, "auto") != 0)
+                        {
+                            strncpy(s_devices[idx].type, device_type, sizeof(s_devices[idx].type) - 1);
+                        }
+                        if (strcmp(device_name, dev_id.c_str()) != 0)
+                        {
+                            strncpy(s_devices[idx].name, device_name, sizeof(s_devices[idx].name) - 1);
+                        }
+                    }
+
+                    mark_online(dev_id.c_str());
+                    Serial.printf("[%s] ✅ Device active: %s (via %s)\n", TAG, dev_id.c_str(), suffix.c_str());
                 }
             }
             break;
@@ -205,7 +250,7 @@ public:
     }
 };
 
-// ── HTTP server + broadcast ───────────────────────────────────────────────────
+// ── HTTP server + broadcast ──────────────────────────────────────────────────────────
 
 static WebServer s_http(HTTP_PORT);
 static BridgeBroker s_broker;
@@ -222,6 +267,7 @@ static void send_broadcast()
     doc["mqtt_port"] = MQTT_PORT;
     doc["http_port"] = HTTP_PORT;
     doc["ip_sta"] = sta_ip.toString();
+    doc["device_count"] = s_device_count;
 
     String payload;
     serializeJson(doc, payload);
@@ -253,7 +299,7 @@ static void handle_api_devices()
     JsonArray arr = doc.to<JsonArray>();
     for (int i = 0; i < s_device_count; i++)
     {
-        if (s_devices[i].last_seen < cutoff)
+        if (s_devices[i].last_seen < cutoff && !s_devices[i].online)
             continue;
 
         JsonObject obj = arr.add<JsonObject>();
@@ -276,7 +322,7 @@ static void handle_root()
     s_http.send(200, "text/html", DASHBOARD_HTML);
 }
 
-// ── wifi connection management ───────────────────────────────────────────────
+// ── wifi connection management ───────────────────────────────────────────────────────
 
 static bool s_sta_connected = false;
 static unsigned long s_last_sta_check = 0;
@@ -312,7 +358,7 @@ static void start_ap()
 
 static void wifi_init_sta()
 {
-    Serial.printf("[%s] 🔍 Initializing WiFi...\n", TAG);
+    Serial.printf("[%s] 🔌 Initializing WiFi...\n", TAG);
 
     WiFi.disconnect(true);
     delay(100);
@@ -532,7 +578,7 @@ static void wifi_setup_mode()
     }
 }
 
-// ── setup / loop ─────────────────────────────────────────────────────────────
+// ── setup / loop ─────────────────────────────────────────────────────────────────────
 
 void setup()
 {
@@ -544,10 +590,10 @@ void setup()
 
     Serial.begin(115200);
     delay(1000);
-    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     Serial.printf("[%s] 🚀 ESP32 MQTT Bridge Broker v3.0\n", TAG);
     Serial.printf("[%s] ⚡ CPU freq: %d MHz\n", TAG, getCpuFrequencyMhz());
-    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
@@ -586,7 +632,7 @@ void setup()
     s_udp.begin(BROADCAST_PORT);
     send_broadcast();
 
-    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     Serial.printf("[%s] ✅ System Ready!\n", TAG);
     if (s_sta_connected)
     {
@@ -600,7 +646,7 @@ void setup()
         Serial.printf("[%s] 🔌 MQTT: %s:%d (AP mode)\n", TAG, WiFi.softAPIP().toString().c_str(), MQTT_PORT);
         Serial.printf("[%s] 🌐 WEB: http://%s:%d\n", TAG, WiFi.softAPIP().toString().c_str(), HTTP_PORT);
     }
-    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Serial.printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
 void loop()

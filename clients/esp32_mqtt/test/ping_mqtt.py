@@ -167,7 +167,7 @@ def discover_bridge(timeout: int = 10) -> Optional[str]:
         sock.settimeout(timeout)
         
         # Bind to broadcast port
-        sock.bind(('', 18888))  # BROADCAST_PORT from config
+        sock.bind(('', 5000))  # BROADCAST_PORT from config
         
         logger.info(f"Listening for bridge broadcasts (timeout: {timeout}s)...")
         
