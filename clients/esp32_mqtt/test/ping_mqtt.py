@@ -276,7 +276,7 @@ class MultiDeviceSimulator:
             device.disconnect()
         logger.info("Disconnected all devices")
 
-def discover_bridge(timeout: int = 10) -> Optional[str]:
+def discover_bridge(timeout: int = 30) -> Optional[str]:
     """Discover MQTT bridge via UDP broadcast"""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -284,7 +284,7 @@ def discover_bridge(timeout: int = 10) -> Optional[str]:
         sock.settimeout(timeout)
         
         # Bind to broadcast port
-        sock.bind(('', 18888))  # BROADCAST_PORT from config
+        sock.bind(('', 5000))  # BROADCAST_PORT from config
         
         logger.info(f"Listening for bridge broadcasts (timeout: {timeout}s)...")
         
