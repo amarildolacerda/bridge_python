@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include <ArduinoJson.h>
 #include <WiFiManager.h>
 #include <PubSubClient.h>
@@ -38,6 +39,9 @@ static unsigned long s_wifi_config_start_time = 0;
 // Button handling
 volatile bool s_button_pressed = false;
 volatile unsigned long s_last_interrupt = 0;
+
+// Web server
+static ESP8266WebServer s_server(80);
 
 // Forward declarations
 static void button_isr(void);
@@ -425,13 +429,16 @@ static bool parse_bridge_response(const char *buffer, int len)
     DynamicJsonDocument doc(512);
     DeserializationError error = deserializeJson(doc, buffer);
 
-    if (error) return false;
-    if (!doc.containsKey("service") || strcmp(doc["service"], "mqtt-bridge") != 0) return false;
+    if (error)
+        return false;
+    if (!doc.containsKey("service") || strcmp(doc["service"], "mqtt-bridge") != 0)
+        return false;
 
     const char *mqtt_ip = doc["ip_sta"];
     int mqtt_port = doc["mqtt_port"];
 
-    if (!mqtt_ip || strlen(mqtt_ip) == 0 || mqtt_port <= 0) return false;
+    if (!mqtt_ip || strlen(mqtt_ip) == 0 || mqtt_port <= 0)
+        return false;
 
     strcpy(s_mqtt_broker, mqtt_ip);
     s_mqtt_port = mqtt_port;
@@ -478,7 +485,8 @@ static bool await_discovery_response(unsigned long timeout_ms)
             char buffer[512];
             int len = s_udp.read(buffer, sizeof(buffer) - 1);
             buffer[len] = '\0';
-            if (parse_bridge_response(buffer, len)) return true;
+            if (parse_bridge_response(buffer, len))
+                return true;
         }
         delay(10);
     }
@@ -509,7 +517,8 @@ static bool discover_mqtt_broker(void)
             char buffer[512];
             int len = s_udp.read(buffer, sizeof(buffer) - 1);
             buffer[len] = '\0';
-            if (parse_bridge_response(buffer, len)) return true;
+            if (parse_bridge_response(buffer, len))
+                return true;
         }
 
         // Re-send active request every 5 seconds
@@ -708,7 +717,7 @@ static void read_sensors(void)
 
 // Button interrupt handler
 #ifdef BUTTON_PIN
-static ICACHE_RAM_ATTR void button_isr(void)
+static IRAM_ATTR void button_isr(void)
 {
     unsigned long now = millis();
     if (now - s_last_interrupt > 300)
@@ -750,6 +759,120 @@ static void check_config_portal_timeout(void)
     }
 }
 
+// ── Web server handlers ───────────────────────────────────────────────────────
+
+static void handle_set_onoff(bool new_state)
+{
+    s_onoff_state = new_state;
+
+#ifdef RELAY_PIN
+    digitalWrite(RELAY_PIN, s_onoff_state ? HIGH : LOW);
+#endif
+
+    Serial.printf("[%s] 💡 Web/REST: %s\n", TAG, s_onoff_state ? "ON" : "OFF");
+
+    if (s_mqtt_connected)
+    {
+        send_state();
+        send_event(s_onoff_state ? "device_turned_on" : "device_turned_off", "info");
+    }
+
+    String json;
+    {
+        DynamicJsonDocument doc(128);
+        doc["status"] = "ok";
+        doc["state"] = s_onoff_state;
+        serializeJson(doc, json);
+    }
+    s_server.send(200, "application/json", json);
+}
+
+static void handle_api_on(void)
+{
+    handle_set_onoff(true);
+}
+
+static void handle_api_off(void)
+{
+    handle_set_onoff(false);
+}
+
+static void handle_api_toggle(void)
+{
+    handle_set_onoff(!s_onoff_state);
+}
+
+static void handle_api_state(void)
+{
+    String json;
+    {
+        DynamicJsonDocument doc(256);
+        doc["state"] = s_onoff_state;
+        doc["device_id"] = DEVICE_ID;
+        doc["device_name"] = DEVICE_NAME;
+        doc["ip"] = WiFi.localIP().toString();
+        doc["rssi"] = WiFi.RSSI();
+        doc["uptime_s"] = (millis() - s_start_time) / 1000;
+        serializeJson(doc, json);
+    }
+    s_server.send(200, "application/json", json);
+}
+
+static void handle_root(void)
+{
+    String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP8266 On/Off</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#16213e;border-radius:20px;padding:2rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;width:90%}
+h1{font-size:1.4rem;margin-bottom:.5rem;color:#e94560}
+.status{font-size:5rem;margin:1rem 0;transition:.3s}.status.on{color:#4ecca3}.status.off{color:#666}
+.label{font-size:.9rem;color:#aaa;margin-bottom:1.5rem}
+.buttons{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap}
+.btn{border:none;border-radius:12px;padding:.7rem 1.5rem;font-size:1rem;cursor:pointer;transition:.2s;flex:1;min-width:80px;color:#fff;font-weight:600}
+.btn:active{transform:scale(.95)}
+.btn-on{background:#4ecca3}.btn-on:hover{background:#3db88e}
+.btn-off{background:#e94560}.btn-off:hover{background:#d63852}
+.btn-toggle{background:#0f3460}.btn-toggle:hover{background:#1a4a8a}
+.info{font-size:.8rem;color:#666;margin-top:1.5rem;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>Luz Sala</h1>
+<div class="status" id="status">⟳</div>
+<div class="label" id="label">carregando...</div>
+<div class="buttons">
+<button class="btn btn-on" onclick="setState('on')">Ligar</button>
+<button class="btn btn-off" onclick="setState('off')">Desligar</button>
+<button class="btn btn-toggle" onclick="setState('toggle')">Inverter</button>
+</div>
+<div class="info" id="info"></div>
+</div>
+<script>
+const el=document.getElementById('status');
+const lb=document.getElementById('label');
+const inf=document.getElementById('info');
+function update(s){el.textContent=s?'🔴':'⚪';el.className='status'+(s?' on':' off');lb.textContent=s?'LIGADO':'DESLIGADO'}
+async function fetchState(){try{const r=await fetch('/api/state');const d=await r.json();update(d.state);inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm'}catch{inf.textContent='Erro de conexão'}}
+async function setState(cmd){try{await fetch('/api/'+cmd,{method:'POST'});await fetchState()}catch{inf.textContent='Erro ao enviar comando'}}
+fetchState();setInterval(fetchState,3000)
+</script>
+</body>
+</html>
+)rawliteral";
+
+    s_server.send(200, "text/html", html);
+}
+
+// ── setup ─────────────────────────────────────────────────────────────────────
+
 void setup(void)
 {
     Serial.begin(115200);
@@ -779,6 +902,15 @@ void setup(void)
         ESP.restart();
     }
 
+    // Start web server
+    s_server.on("/", handle_root);
+    s_server.on("/api/state", handle_api_state);
+    s_server.on("/api/on", HTTP_POST, handle_api_on);
+    s_server.on("/api/off", HTTP_POST, handle_api_off);
+    s_server.on("/api/toggle", HTTP_POST, handle_api_toggle);
+    s_server.begin();
+    Serial.printf("[%s] 🌐 Web server started on http://%s\n", TAG, WiFi.localIP().toString().c_str());
+
     // Discover MQTT bridge by listening to broadcasts
     if (discover_mqtt_broker())
     {
@@ -798,6 +930,7 @@ void setup(void)
 void loop(void)
 {
     check_config_portal_timeout();
+    s_server.handleClient();
 
     if (WiFi.status() != WL_CONNECTED)
     {
@@ -856,5 +989,5 @@ void loop(void)
     }
 #endif
 
-    delay(10);
+    delay(1);
 }

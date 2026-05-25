@@ -11,7 +11,7 @@
 #include "dashboard.h"
 
 // ── workaround brownout ──────────────────────────────────────────────────────────────
-#define DISABLE_BROWNOUT
+// #define DISABLE_BROWNOUT
 #ifdef DISABLE_BROWNOUT
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
