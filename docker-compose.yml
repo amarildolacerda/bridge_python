@@ -3,7 +3,9 @@ services:
     image: espressif/esp-matter:latest
     container_name: esp-matter-dev
     
-    
+    ports:
+      - "8080:8080"  # Mapeia porta 8080 do container para porta 8080 do Windows
+        
     volumes:
       - C:\git\bridge:/project
       - idf_cache:/root/.espressif
