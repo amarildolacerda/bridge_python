@@ -7,6 +7,7 @@
 #include <WiFiUdp.h>
 #include <DHT.h>
 #include "config.h"
+#include "pages.h"
 
 static const char *TAG = "esp8266-dht11";
 
@@ -343,44 +344,7 @@ static void check_config_portal_timeout(void)
 
 static void handle_root(void)
 {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ESP8266 DHT11</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#16213e;border-radius:20px;padding:2rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;width:90%}
-h1{font-size:1.4rem;margin-bottom:.5rem;color:#e94560}
-.temp{font-size:4rem;margin:.5rem 0;color:#4ecca3}
-.humid{font-size:2rem;margin:.5rem 0;color:#0f3460}
-.label{font-size:.9rem;color:#aaa;margin-bottom:.5rem}
-.info{font-size:.8rem;color:#666;margin-top:1.5rem;word-break:break-all}
-</style>
-</head>
-<body>
-<div class="card">
-<h1>Temperatura Sala</h1>
-<div class="label">Temperatura</div>
-<div class="temp" id="temp">--.-°C</div>
-<div class="label">Umidade</div>
-<div class="humid" id="humid">--.-%</div>
-<div class="info" id="info"></div>
-</div>
-<script>
-const tempEl=document.getElementById('temp');
-const humEl=document.getElementById('humid');
-const inf=document.getElementById('info');
-async function fetchState(){try{const r=await fetch('/api/state');const d=await r.json();tempEl.textContent=d.temperature.toFixed(1)+'°C';humEl.textContent=d.humidity.toFixed(1)+'%';inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm'}catch{inf.textContent='Erro de conexao'}}
-fetchState();setInterval(fetchState,3000)
-</script>
-</body>
-</html>
-)rawliteral";
-    s_server.send(200, "text/html", html);
+    s_server.send(200, "text/html", FPSTR(PAGE_DASHBOARD));
 }
 
 static void handle_api_state(void)
@@ -464,11 +428,15 @@ void loop(void)
     }
 
 #ifdef LED_PIN
-    static unsigned long last_blink = 0;
-    if (now - last_blink > 1000)
-    {
-        last_blink = now;
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    static unsigned long last_led = 0;
+    if (s_wifi_configuration_mode) {
+        digitalWrite(LED_PIN, HIGH);
+    } else if (WiFi.status() != WL_CONNECTED) {
+        if (now - last_led >= 200) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
+    } else if (!s_bridge_discovered) {
+        if (now - last_led >= 2000) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
+    } else {
+        digitalWrite(LED_PIN, LOW);
     }
 #endif
 

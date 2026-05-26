@@ -6,6 +6,7 @@
 
 #define MAX_DEVICE_ID_LEN 64
 #define MAX_DEVICE_NAME_LEN 64
+#define MAX_DEVICE_STATE_LEN 64
 #define MAX_BRIDGED_DEVICES CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT
 #define MAX_PENDING_COMMANDS 4
 #define MAX_COMMAND_DATA_LEN 64
@@ -37,6 +38,7 @@ typedef struct {
     pending_command_t pending_commands[MAX_PENDING_COMMANDS];
     int pending_command_count;
     bool online;
+    char state_json[MAX_DEVICE_STATE_LEN];
 } bridged_device_t;
 
 device_type_t device_type_from_string(const char *type_str);
@@ -49,6 +51,7 @@ bridged_device_t *device_registry_get_by_id(const char *id);
 bridged_device_t *device_registry_get_by_endpoint(uint16_t endpoint_id);
 bridged_device_t *device_registry_get_all(int *count);
 esp_err_t device_registry_update_state(const char *id, const char *key, const char *value);
+const char *device_registry_get_state_json(const char *id);
 esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster, const char *command, const char *data);
 int device_registry_get_commands(uint16_t endpoint_id, pending_command_t *commands, int max_commands);
 esp_err_t device_registry_remove_device(const char *id);

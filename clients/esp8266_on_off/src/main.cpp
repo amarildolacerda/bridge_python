@@ -6,6 +6,7 @@
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include "config.h"
+#include "pages.h"
 
 static const char *TAG = "esp8266-bridge";
 
@@ -18,6 +19,7 @@ static unsigned long s_last_telemetry_update = 0;
 static unsigned long s_last_reconnect_attempt = 0;
 static unsigned long s_last_broadcast_check = 0;
 static unsigned long s_last_command_poll = 0;
+static unsigned long s_last_bridge_reconnect = 0;
 
 static bool s_onoff_state = false;
 static float s_temperature = 25.0;
@@ -98,6 +100,8 @@ static bool register_device(void)
 
 static void send_state(bool force_log)
 {
+    if (!s_bridge_discovered || !s_bridge_connected) return;
+
     String body;
     {
         JsonDocument doc;
@@ -154,6 +158,8 @@ static void send_state(bool force_log)
 
 static void poll_commands(void)
 {
+    if (!s_bridge_connected) return;
+
     String url = String("http://") + s_bridge_host + ":" + s_bridge_port + "/api/device/commands?id=" + DEVICE_ID;
 
     s_http.begin(s_wifi, url);
@@ -461,54 +467,7 @@ static void handle_api_state(void)
 
 static void handle_root(void)
 {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ESP8266 On/Off</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#16213e;border-radius:20px;padding:2rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;width:90%}
-h1{font-size:1.4rem;margin-bottom:.5rem;color:#e94560}
-.status{font-size:5rem;margin:1rem 0;transition:.3s}.status.on{color:#4ecca3}.status.off{color:#666}
-.label{font-size:.9rem;color:#aaa;margin-bottom:1.5rem}
-.buttons{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap}
-.btn{border:none;border-radius:12px;padding:.7rem 1.5rem;font-size:1rem;cursor:pointer;transition:.2s;flex:1;min-width:80px;color:#fff;font-weight:600}
-.btn:active{transform:scale(.95)}
-.btn-on{background:#4ecca3}.btn-on:hover{background:#3db88e}
-.btn-off{background:#e94560}.btn-off:hover{background:#d63852}
-.btn-toggle{background:#0f3460}.btn-toggle:hover{background:#1a4a8a}
-.info{font-size:.8rem;color:#666;margin-top:1.5rem;word-break:break-all}
-</style>
-</head>
-<body>
-<div class="card">
-<h1>Luz Sala</h1>
-<div class="status" id="status">⟳</div>
-<div class="label" id="label">carregando...</div>
-<div class="buttons">
-<button class="btn btn-on" onclick="setState('on')">Ligar</button>
-<button class="btn btn-off" onclick="setState('off')">Desligar</button>
-<button class="btn btn-toggle" onclick="setState('toggle')">Inverter</button>
-</div>
-<div class="info" id="info"></div>
-</div>
-<script>
-const el=document.getElementById('status');
-const lb=document.getElementById('label');
-const inf=document.getElementById('info');
-function update(s){el.textContent=s?'🔴':'⚪';el.className='status'+(s?' on':' off');lb.textContent=s?'LIGADO':'DESLIGADO'}
-async function fetchState(){try{const r=await fetch('/api/state');const d=await r.json();update(d.state);inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm'}catch{inf.textContent='Erro de conexão'}}
-async function setState(cmd){try{await fetch('/api/'+cmd,{method:'POST'});await fetchState()}catch{inf.textContent='Erro ao enviar comando'}}
-fetchState();setInterval(fetchState,3000)
-</script>
-</body>
-</html>
-)rawliteral";
-    s_server.send(200, "text/html", html);
+    s_server.send(200, "text/html", FPSTR(PAGE_DASHBOARD));
 }
 
 void setup(void)
@@ -560,6 +519,14 @@ void loop(void)
     maintain_bridge_discovery();
 
     unsigned long now = millis();
+
+    if (!s_bridge_connected && s_bridge_discovered && now - s_last_bridge_reconnect > 30000) {
+        s_last_bridge_reconnect = now;
+        if (register_device()) {
+            s_last_state_update = now;
+            send_state(true);
+        }
+    }
 
     if (now - s_last_command_poll > COMMAND_POLL_INTERVAL) {
         s_last_command_poll = now;
