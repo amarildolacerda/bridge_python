@@ -246,20 +246,17 @@ static esp_err_t register_device_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    bridged_device_t *dev = device_registry_get_by_id(id);
-    uint16_t ep_id = dev ? dev->matter_endpoint_id : 0;
-
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", "ok");
-    cJSON_AddNumberToObject(resp, "endpoint_id", ep_id);
+    cJSON_AddNumberToObject(resp, "slot", slot);
     const char *resp_str = cJSON_Print(resp);
     httpd_resp_sendstr(req, resp_str);
     free((void *)resp_str);
     cJSON_Delete(resp);
     cJSON_Delete(root);
 
-    ESP_LOGI(TAG, "Device registered: %s (type: %s, ep: %d)", id, type_str, ep_id);
+    ESP_LOGI(TAG, "Device registered: %s (type: %s, slot: %d)", id, type_str, slot);
     free(buf);
     return ESP_OK;
 }

@@ -17,6 +17,22 @@ using namespace esp_matter::attribute;
 using namespace esp_matter::endpoint;
 using namespace chip::app::Clusters;
 
+struct bridge_add_work_t {
+    char id[MAX_DEVICE_ID_LEN];
+    device_type_t type;
+    char name[MAX_DEVICE_NAME_LEN];
+};
+
+struct bridge_update_work_t {
+    char id[MAX_DEVICE_ID_LEN];
+    char key[32];
+    char value[64];
+};
+
+struct bridge_remove_work_t {
+    char id[MAX_DEVICE_ID_LEN];
+};
+
 static void set_reachable_work(intptr_t arg)
 {
     uint16_t ep_id = (uint16_t)arg;
@@ -30,6 +46,124 @@ static esp_err_t set_reachable(endpoint_t *ep)
     chip::DeviceLayer::PlatformMgr().ScheduleWork(set_reachable_work,
                                                   (intptr_t)endpoint::get_id(ep));
     return ESP_OK;
+}
+
+static void bridge_add_device_work(intptr_t arg)
+{
+    bridge_add_work_t *work = (bridge_add_work_t *)arg;
+    if (!work) return;
+
+    uint32_t matter_type_id = device_type_to_matter_id(work->type);
+    char *id_copy = strdup(work->id);
+    if (!id_copy) {
+        ESP_LOGE(TAG, "Failed to allocate id copy for %s", work->id);
+        free(work);
+        return;
+    }
+
+    esp_matter_bridge::device_t *dev = esp_matter_bridge::create_device(
+        s_node, s_aggregator_endpoint_id, matter_type_id, (void *)id_copy);
+    if (!dev) {
+        ESP_LOGE(TAG, "Failed to create bridged device for %s (type 0x%04lx)",
+                 work->id, matter_type_id);
+        free(id_copy);
+        free(work);
+        return;
+    }
+
+    uint16_t ep_id = endpoint::get_id(dev->endpoint);
+    device_registry_set_endpoint_id(work->id, ep_id);
+    ESP_LOGI(TAG, "Bridged device %s created on endpoint %d (Matter type 0x%04lx)",
+             work->id, ep_id, matter_type_id);
+    free(work);
+}
+
+static void bridge_update_matter_state_work(intptr_t arg)
+{
+    bridge_update_work_t *work = (bridge_update_work_t *)arg;
+    if (!work) return;
+
+    bridged_device_t *dev = device_registry_get_by_id(work->id);
+    if (!dev) {
+        ESP_LOGW(TAG, "Device %s not found for state update", work->id);
+        free(work);
+        return;
+    }
+
+    if (dev->type == DEVICE_TYPE_TANQUE) {
+        ESP_LOGI(TAG, "Tanque %s: %s = %s", work->id, work->key, work->value);
+        free(work);
+        return;
+    }
+
+    if (dev->matter_endpoint_id == 0) {
+        free(work);
+        return;
+    }
+
+    uint16_t ep_id = dev->matter_endpoint_id;
+
+    if (strcmp(work->key, "on") == 0) {
+        bool on = (strcmp(work->value, "true") == 0 || strcmp(work->value, "1") == 0);
+        esp_matter_attr_val_t val = esp_matter_bool(on);
+        attribute::update(ep_id, OnOff::Id, OnOff::Attributes::OnOff::Id, &val);
+    } else if (strcmp(work->key, "level") == 0) {
+        uint8_t level = (uint8_t)atoi(work->value);
+        level = (level > 254) ? 254 : level;
+        esp_matter_attr_val_t val = esp_matter_uint8(level);
+        attribute::update(ep_id, LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id, &val);
+    } else if (strcmp(work->key, "temperature") == 0) {
+        int16_t temp = (int16_t)(atof(work->value) * 100);
+        esp_matter_attr_val_t val = esp_matter_int16(temp);
+        attribute::update(ep_id, TemperatureMeasurement::Id,
+                          TemperatureMeasurement::Attributes::MeasuredValue::Id, &val);
+    } else if (strcmp(work->key, "humidity") == 0) {
+        uint16_t hum = (uint16_t)(atof(work->value) * 100);
+        esp_matter_attr_val_t val = esp_matter_uint16(hum);
+        attribute::update(ep_id, RelativeHumidityMeasurement::Id,
+                          RelativeHumidityMeasurement::Attributes::MeasuredValue::Id, &val);
+    } else if (strcmp(work->key, "contact") == 0) {
+        bool contact = (strcmp(work->value, "true") == 0 || strcmp(work->value, "1") == 0);
+        esp_matter_attr_val_t val = esp_matter_bool(contact);
+        attribute::update(ep_id, BooleanState::Id,
+                          BooleanState::Attributes::StateValue::Id, &val);
+    } else if (strcmp(work->key, "occupancy") == 0) {
+        bool occupied = (strcmp(work->value, "true") == 0 || strcmp(work->value, "1") == 0);
+        esp_matter_attr_val_t val = esp_matter_bool(occupied);
+        attribute::update(ep_id, OccupancySensing::Id,
+                          OccupancySensing::Attributes::Occupancy::Id, &val);
+    } else if (strcmp(work->key, "light_level") == 0) {
+        uint16_t lux = (uint16_t)atoi(work->value);
+        esp_matter_attr_val_t val = esp_matter_uint16(lux);
+        attribute::update(ep_id, IlluminanceMeasurement::Id,
+                          IlluminanceMeasurement::Attributes::MeasuredValue::Id, &val);
+    } else {
+        ESP_LOGW(TAG, "Unknown state key: %s for device %s", work->key, work->id);
+    }
+
+    free(work);
+}
+
+static void bridge_remove_device_work(intptr_t arg)
+{
+    bridge_remove_work_t *work = (bridge_remove_work_t *)arg;
+    if (!work) return;
+
+    bridged_device_t *dev = device_registry_get_by_id(work->id);
+    if (!dev) {
+        free(work);
+        return;
+    }
+
+    esp_matter_bridge::device_t *bridge_dev = esp_matter_bridge::resume_device(
+        s_node, dev->matter_endpoint_id, NULL);
+    if (bridge_dev) {
+        esp_matter_bridge::remove_device(bridge_dev);
+    }
+
+    device_registry_remove_device(work->id);
+    ESP_LOGI(TAG, "Bridged device %s removed", work->id);
+    free(work);
 }
 
 static esp_err_t device_type_callback(endpoint_t *ep, uint32_t device_type_id, void *priv_data)
@@ -205,33 +339,25 @@ esp_err_t bridge_add_device(const char *id, device_type_t type, const char *name
 
     uint32_t matter_type_id = device_type_to_matter_id(type);
 
-    // Tanque: sem endpoint Matter, apenas coleta dados via REST
     if (matter_type_id == 0) {
         ESP_LOGI(TAG, "Device %s registered as data-only (no Matter endpoint)", id);
         return ESP_OK;
     }
 
-    // Make a copy of id for priv_data (HTTP buffer may be freed)
-    char *id_copy = strdup(id);
-    if (!id_copy) {
-        ESP_LOGE(TAG, "Failed to allocate id copy for %s", id);
-        return ESP_FAIL;
+    bridge_add_work_t *work = (bridge_add_work_t *)malloc(sizeof(bridge_add_work_t));
+    if (!work) {
+        ESP_LOGE(TAG, "Failed to allocate work item for %s", id);
+        return ESP_ERR_NO_MEM;
     }
 
-    esp_matter_bridge::device_t *dev = esp_matter_bridge::create_device(
-        s_node, s_aggregator_endpoint_id, matter_type_id, (void *)id_copy);
-    if (!dev) {
-        ESP_LOGE(TAG, "Failed to create bridged device for %s (type 0x%04lx, aggregator ep=%d)",
-                 id, matter_type_id, s_aggregator_endpoint_id);
-        free(id_copy);
-        return ESP_FAIL;
-    }
+    strncpy(work->id, id, sizeof(work->id) - 1);
+    work->id[sizeof(work->id) - 1] = '\0';
+    work->type = type;
+    strncpy(work->name, name ? name : id, sizeof(work->name) - 1);
+    work->name[sizeof(work->name) - 1] = '\0';
 
-    uint16_t ep_id = endpoint::get_id(dev->endpoint);
-    device_registry_set_endpoint_id(id, ep_id);
-
-    ESP_LOGI(TAG, "Bridged device %s created on endpoint %d (Matter type 0x%04lx)",
-             id, ep_id, matter_type_id);
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(bridge_add_device_work, (intptr_t)work);
+    ESP_LOGI(TAG, "Device %s queued for Matter endpoint creation", id);
     return ESP_OK;
 }
 
@@ -242,14 +368,17 @@ esp_err_t bridge_remove_device(const char *id)
         return ESP_ERR_NOT_FOUND;
     }
 
-    esp_matter_bridge::device_t *bridge_dev = esp_matter_bridge::resume_device(
-        s_node, dev->matter_endpoint_id, NULL);
-    if (bridge_dev) {
-        esp_matter_bridge::remove_device(bridge_dev);
+    bridge_remove_work_t *work = (bridge_remove_work_t *)malloc(sizeof(bridge_remove_work_t));
+    if (!work) {
+        ESP_LOGE(TAG, "Failed to allocate remove work item for %s", id);
+        return ESP_ERR_NO_MEM;
     }
 
-    device_registry_remove_device(id);
-    ESP_LOGI(TAG, "Bridged device %s removed", id);
+    strncpy(work->id, id, sizeof(work->id) - 1);
+    work->id[sizeof(work->id) - 1] = '\0';
+
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(bridge_remove_device_work, (intptr_t)work);
+    ESP_LOGI(TAG, "Device %s queued for removal", id);
     return ESP_OK;
 }
 
@@ -260,7 +389,6 @@ esp_err_t bridge_update_matter_state(const char *id, const char *key, const char
         return ESP_ERR_NOT_FOUND;
     }
 
-    // Tanque: dados sem endpoint Matter, apenas log
     if (dev->type == DEVICE_TYPE_TANQUE) {
         ESP_LOGI(TAG, "Tanque %s: %s = %s", id, key, value);
         return ESP_OK;
@@ -270,52 +398,21 @@ esp_err_t bridge_update_matter_state(const char *id, const char *key, const char
         return ESP_ERR_NOT_FOUND;
     }
 
-    uint16_t ep_id = dev->matter_endpoint_id;
-
-    if (strcmp(key, "on") == 0) {
-        bool on = (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
-        esp_matter_attr_val_t val = esp_matter_bool(on);
-        return esp_matter::attribute::update(ep_id, OnOff::Id, OnOff::Attributes::OnOff::Id, &val);
-    }
-    if (strcmp(key, "level") == 0) {
-        uint8_t level = (uint8_t)atoi(value);
-        level = (level > 254) ? 254 : level;
-        esp_matter_attr_val_t val = esp_matter_uint8(level);
-        return esp_matter::attribute::update(ep_id, LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id, &val);
-    }
-    if (strcmp(key, "temperature") == 0) {
-        int16_t temp = (int16_t)(atof(value) * 100);
-        esp_matter_attr_val_t val = esp_matter_int16(temp);
-        return esp_matter::attribute::update(ep_id, TemperatureMeasurement::Id,
-                                             TemperatureMeasurement::Attributes::MeasuredValue::Id, &val);
-    }
-    if (strcmp(key, "humidity") == 0) {
-        uint16_t hum = (uint16_t)(atof(value) * 100);
-        esp_matter_attr_val_t val = esp_matter_uint16(hum);
-        return esp_matter::attribute::update(ep_id, RelativeHumidityMeasurement::Id,
-                                             RelativeHumidityMeasurement::Attributes::MeasuredValue::Id, &val);
-    }
-    if (strcmp(key, "contact") == 0) {
-        bool contact = (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
-        esp_matter_attr_val_t val = esp_matter_bool(contact);
-        return esp_matter::attribute::update(ep_id, BooleanState::Id,
-                                             BooleanState::Attributes::StateValue::Id, &val);
-    }
-    if (strcmp(key, "occupancy") == 0) {
-        bool occupied = (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
-        esp_matter_attr_val_t val = esp_matter_bool(occupied);
-        return esp_matter::attribute::update(ep_id, OccupancySensing::Id,
-                                             OccupancySensing::Attributes::Occupancy::Id, &val);
-    }
-    if (strcmp(key, "light_level") == 0) {
-        uint16_t lux = (uint16_t)atoi(value);
-        esp_matter_attr_val_t val = esp_matter_uint16(lux);
-        return esp_matter::attribute::update(ep_id, IlluminanceMeasurement::Id,
-                                             IlluminanceMeasurement::Attributes::MeasuredValue::Id, &val);
+    bridge_update_work_t *work = (bridge_update_work_t *)malloc(sizeof(bridge_update_work_t));
+    if (!work) {
+        ESP_LOGE(TAG, "Failed to allocate state update work for %s", id);
+        return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGW(TAG, "Unknown state key: %s for device %s", key, id);
-    return ESP_ERR_INVALID_ARG;
+    strncpy(work->id, id, sizeof(work->id) - 1);
+    work->id[sizeof(work->id) - 1] = '\0';
+    strncpy(work->key, key, sizeof(work->key) - 1);
+    work->key[sizeof(work->key) - 1] = '\0';
+    strncpy(work->value, value, sizeof(work->value) - 1);
+    work->value[sizeof(work->value) - 1] = '\0';
+
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(bridge_update_matter_state_work, (intptr_t)work);
+    return ESP_OK;
 }
 
 uint16_t bridge_get_aggregator_endpoint_id(void)
