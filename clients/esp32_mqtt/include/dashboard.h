@@ -36,6 +36,7 @@ td.name{color:#2C3E50}
 <div class="stat"><div class="num" id="total">—</div><div class="label">Total</div></div>
 <div class="stat"><div class="num" id="online">—</div><div class="label">Online</div></div>
 <div class="stat"><div class="num" id="offline">—</div><div class="label">Offline</div></div>
+<div class="stat"><div class="num" id="uptime">—</div><div class="label">Uptime</div></div>
 </div>
 <div class="refresh">Atualizado: <span id="ts">carregando...</span></div>
 <table>
@@ -43,7 +44,13 @@ td.name{color:#2C3E50}
 <tbody id="tbody"></tbody>
 </table>
 <script>
+function fmtUptime(s){let d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return(d?d+'d ':'')+h+'h '+m+'m '+s%60+'s'}
 async function load(){
+try{
+let r=await fetch('/api/info');
+let b=await r.json();
+document.getElementById('uptime').textContent=fmtUptime(b.uptime_s|0);
+}catch(e){}
 try{
 const r=await fetch('/api/devices');
 const d=await r.json();

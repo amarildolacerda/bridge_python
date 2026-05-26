@@ -17,41 +17,68 @@ using namespace esp_matter::attribute;
 using namespace esp_matter::endpoint;
 using namespace chip::app::Clusters;
 
+static void set_reachable_work(intptr_t arg)
+{
+    uint16_t ep_id = (uint16_t)arg;
+    esp_matter_attr_val_t reachable = esp_matter_bool(true);
+    attribute::update(ep_id, BridgedDeviceBasicInformation::Id,
+                      BridgedDeviceBasicInformation::Attributes::Reachable::Id, &reachable);
+}
+
+static esp_err_t set_reachable(endpoint_t *ep)
+{
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(set_reachable_work,
+                                                  (intptr_t)endpoint::get_id(ep));
+    return ESP_OK;
+}
+
 static esp_err_t device_type_callback(endpoint_t *ep, uint32_t device_type_id, void *priv_data)
 {
+    esp_err_t err = ESP_OK;
     switch (device_type_id) {
     case ESP_MATTER_ON_OFF_LIGHT_DEVICE_TYPE_ID: {
         on_off_light::config_t config;
-        return on_off_light::add(ep, &config);
+        err = on_off_light::add(ep, &config);
+        break;
     }
     case ESP_MATTER_DIMMABLE_LIGHT_DEVICE_TYPE_ID: {
         dimmable_light::config_t config;
-        return dimmable_light::add(ep, &config);
+        err = dimmable_light::add(ep, &config);
+        break;
     }
     case ESP_MATTER_TEMPERATURE_SENSOR_DEVICE_TYPE_ID: {
         temperature_sensor::config_t config;
-        return temperature_sensor::add(ep, &config);
+        err = temperature_sensor::add(ep, &config);
+        break;
     }
     case ESP_MATTER_HUMIDITY_SENSOR_DEVICE_TYPE_ID: {
         humidity_sensor::config_t config;
-        return humidity_sensor::add(ep, &config);
+        err = humidity_sensor::add(ep, &config);
+        break;
     }
     case ESP_MATTER_CONTACT_SENSOR_DEVICE_TYPE_ID: {
         contact_sensor::config_t config;
-        return contact_sensor::add(ep, &config);
+        err = contact_sensor::add(ep, &config);
+        break;
     }
     case ESP_MATTER_OCCUPANCY_SENSOR_DEVICE_TYPE_ID: {
         occupancy_sensor::config_t config;
-        return occupancy_sensor::add(ep, &config);
+        err = occupancy_sensor::add(ep, &config);
+        break;
     }
     case ESP_MATTER_LIGHT_SENSOR_DEVICE_TYPE_ID: {
         light_sensor::config_t config;
-        return light_sensor::add(ep, &config);
+        err = light_sensor::add(ep, &config);
+        break;
     }
     default:
         ESP_LOGE(TAG, "Unsupported device type: 0x%04lx", device_type_id);
         return ESP_ERR_INVALID_ARG;
     }
+    if (err == ESP_OK) {
+        set_reachable(ep);
+    }
+    return err;
 }
 
 static void handle_matter_to_device_command(uint16_t endpoint_id, uint32_t cluster_id, uint32_t attribute_id, esp_matter_attr_val_t *val)
@@ -200,11 +227,6 @@ esp_err_t bridge_add_device(const char *id, device_type_t type, const char *name
         return ESP_FAIL;
     }
 
-    esp_matter_attr_val_t reachable = esp_matter_bool(true);
-    attribute::set(dev->endpoint, BridgedDeviceBasicInformation::Id,
-                   BridgedDeviceBasicInformation::Attributes::Reachable::Id, &reachable);
-
-    endpoint::enable(dev->endpoint);
     uint16_t ep_id = endpoint::get_id(dev->endpoint);
     device_registry_set_endpoint_id(id, ep_id);
 

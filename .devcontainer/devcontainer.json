@@ -1,16 +1,19 @@
 {
-    "name": "ESP-Matter Dev",
-    "dockerComposeFile": "../docker-compose.yml",
-    "service": "esp-matter-dev",
-    "workspaceFolder": "/project",
-    "shutdownAction": "stopCompose",
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "espressif.esp-idf-extension",
-                "ms-vscode.cpptools",
-                "ms-python.python"
-            ]
-        }
-    }
+	"name": "ESP-IDF QEMU",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"idf.gitPath": "/usr/bin/git"
+			},
+			"extensions": [
+				"espressif.esp-idf-extension",
+				"espressif.esp-idf-web"
+			]
+		}
+	},
+	"runArgs": ["--privileged"]
 }

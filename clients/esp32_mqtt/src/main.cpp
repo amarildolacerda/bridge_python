@@ -33,6 +33,7 @@ typedef struct
 
 static BridgedDevice s_devices[WIFI_AP_MAX_CLIENTS];
 static int s_device_count = 0;
+static unsigned long s_start_time = 0;
 
 static int find_device(const char *id)
 {
@@ -342,6 +343,19 @@ static int recent_client_count()
     return count;
 }
 
+static void handle_api_info()
+{
+    JsonDocument doc;
+    doc["ip"] = (s_sta_connected ? sta_ip.toString() : WiFi.softAPIP().toString());
+    doc["uptime_s"] = (millis() - s_start_time) / 1000;
+    doc["free_heap"] = ESP.getFreeHeap();
+    doc["devices_count"] = s_device_count;
+    doc["sta_connected"] = s_sta_connected;
+    String buf;
+    serializeJson(doc, buf);
+    s_http.send(200, "application/json", buf);
+}
+
 static void handle_api_devices()
 {
     unsigned long cutoff = millis() - CLIENT_HISTORY_MS;
@@ -641,6 +655,7 @@ void setup()
 
     Serial.begin(115200);
     delay(1000);
+    s_start_time = millis();
     Serial.printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     Serial.printf("[%s] 🚀 ESP32 MQTT Bridge Broker v3.0\n", TAG);
     Serial.printf("[%s] ⚡ CPU freq: %d MHz\n", TAG, getCpuFrequencyMhz());
@@ -658,6 +673,7 @@ void setup()
 
     s_http.on("/", handle_root);
     s_http.on("/api/devices", handle_api_devices);
+    s_http.on("/api/info", handle_api_info);
     s_http.begin();
 
     if (s_sta_connected)

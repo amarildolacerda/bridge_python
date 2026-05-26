@@ -232,10 +232,11 @@ idf.py size-components  # Detalhado por componente
 9. led interno: se o wifi nao estiver ativo, piscar mais rápido, se nao estiver falando com o bridger piscar mais lento, se estiver tudo normal não piscar (200, 2000). Se estiver aguardando configuração manter ligado, sem piscar.
 10. **CRÍTICO: NUNCA fazer HTTP POST síncrono dentro de handler do web server.** Chamar `send_state()` (ou qualquer `http_post`) dentro de `handle_set_onoff()` bloqueia o servidor web — a página fica travada até o bridge responder (500ms~10s). Sempre usar flag `s_pending_state_sync` + processar no `loop()`.
 11. paginas e html devem ficar em arquivos separados
-12. preferir usar classes de controles em arquivos dedicados, evitar miturar tudo no mesmo arquivo
-13. sempre que possivel o dispositivo deve ter uma dashboard proprio
-14. sempre perguntar se deseja executar build, e se for executar sempre usar cached
-15. a comunicação com o bridge não pode ser bloqueante
+12. mostrar o tempo que esta ativo no dashboard para avaliação visual sobre reset não previstos
+13. preferir usar classes de controles em arquivos dedicados, evitar miturar tudo no mesmo arquivo
+14. sempre que possivel o dispositivo deve ter uma dashboard proprio
+15. sempre perguntar se deseja executar build, e se for executar sempre usar cached
+16. a comunicação com o bridge não pode ser bloqueante
 ```sh
 
 ```

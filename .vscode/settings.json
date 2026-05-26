@@ -1,4 +1,6 @@
 {
     "idf.flashType": "UART",
-    "DockerRun.DisableDockerrc": true
+    "DockerRun.DisableDockerrc": true,
+    "idf.currentSetup": "C:\\Users\\amari\\esp\\v5.4.1\\esp-idf",
+    "idf.portWin": "COM5"
 }

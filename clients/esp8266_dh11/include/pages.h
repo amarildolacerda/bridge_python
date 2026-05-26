@@ -35,7 +35,8 @@ try{
 const r=await fetch('/api/state');const d=await r.json();
 tempEl.textContent=d.temperature.toFixed(1)+'\u00B0C';
 humEl.textContent=d.humidity.toFixed(1)+'%';
-inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm';
+    let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
+    inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm | Up: '+upt;
 }catch{inf.textContent='Erro de conex\u00E3o'}
 }
 fetchState();setInterval(fetchState,3000)
