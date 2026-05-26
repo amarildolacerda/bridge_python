@@ -491,17 +491,9 @@ static esp_err_t ping_handler(httpd_req_t *req)
 
 static esp_err_t bridge_info_handler(httpd_req_t *req)
 {
-    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("STA_DEF");
-    esp_netif_ip_info_t ip_info;
-    char ip_str[16] = "0.0.0.0";
-
-    if (netif && esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
-        snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
-    }
-
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
-    cJSON_AddStringToObject(resp, "ip", ip_str);
+    cJSON_AddStringToObject(resp, "ip", s_bridge_ip);
     cJSON_AddNumberToObject(resp, "uptime_s", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(resp, "free_heap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(resp, "min_free_heap", esp_get_minimum_free_heap_size());

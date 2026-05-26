@@ -19,8 +19,8 @@ Este documento define um sistema de design único que equilibra **leveza**
 --text-dim:   #64748b;   /* Slate 500  — labels, metadados */
 --text-muted: #475569;   /* Slate 600  — info secundária */
 
---accent:     #38bdf8;   /* Sky 400    — títulos, links, bordas ativas */
---accent-alt: #6c8cff;   /* Indigo     — variante bridge */
+--accent:     #B2CEfE;   /* Azul Bebê  — títulos, links, bordas ativas */
+--accent-alt: #8BAEF8;   /* Azul Bebê+ — variante bridge */
 
 --success:    #34d399;   /* Emerald 400 — ligado, online */
 --success-bg: #065f46;   /* Emerald 900 — badge fundo on */
@@ -117,7 +117,7 @@ body{
 .btn:active{opacity:.7}
 .btn-on{background:var(--success,#34d399)}
 .btn-off{background:var(--danger,#f87171)}
-.btn-accent{background:var(--accent,#38bdf8)}
+.btn-accent{background:var(--accent,#B2CEfE)}
 ```
 
 ### 4.3 LED Indicador (Status)
@@ -146,7 +146,7 @@ body{
 /* Para sensor numérico */
 .valor-sensor{
   font-size:2.5rem;text-align:center;
-  margin:.25rem 0;color:var(--accent,#38bdf8);
+  margin:.25rem 0;color:var(--accent,#B2CEfE);
 }
 ```
 
@@ -167,7 +167,7 @@ body{
   border-radius:12px;padding:12px 20px;
   text-align:center;flex:1;
 }
-.stat .num{font-size:1.8rem;font-weight:700;color:var(--accent,#38bdf8)}
+.stat .num{font-size:1.8rem;font-weight:700;color:var(--accent,#B2CEfE)}
 .stat .label{font-size:.7rem;color:var(--text-dim,#64748b);text-transform:uppercase;letter-spacing:.5px}
 ```
 
@@ -177,7 +177,7 @@ body{
 table{width:100%;border-collapse:collapse;background:var(--bg-card,#1e293b);border-radius:12px;overflow:hidden}
 th{background:var(--bg-hover,#334155);padding:10px 12px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim,#64748b)}
 td{padding:10px 12px;border-top:1px solid var(--bg-hover,#334155);font-size:.82rem}
-td.id{color:var(--accent,#38bdf8);font-weight:600;font-family:monospace}
+td.id{color:var(--accent,#B2CEfE);font-weight:600;font-family:monospace}
 td.type{color:var(--purple,#a78bfa)}
 ```
 
@@ -333,14 +333,14 @@ static const char PAGE_DASHBOARD[] PROGMEM = R"rawliteral(
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh}
 .card{background:#1e293b;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
-h1{font-size:1.3rem;color:#38bdf8;margin-bottom:4px}
+h1{font-size:1.3rem;color:#B2CEfE;margin-bottom:4px}
 .label{color:#64748b;font-size:.85rem;margin-bottom:16px}
 /* === COMPONENTES === */
 .valor-status{font-size:4rem;margin:.5rem 0;transition:color .3s}
 .valor-status.on{color:#34d399}.valor-status.off{color:#475569}
 .btn{border:none;border-radius:10px;padding:.65rem 1.25rem;font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s;color:#fff;min-width:80px;-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:.7}
-.btn-on{background:#34d399}.btn-off{background:#f87171}.btn-accent{background:#38bdf8}
+.btn-on{background:#34d399}.btn-off{background:#f87171}.btn-accent{background:#B2CEfE}
 .buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
 .info{color:#475569;font-size:.8rem;margin-top:16px;word-break:break-all}
 </style>

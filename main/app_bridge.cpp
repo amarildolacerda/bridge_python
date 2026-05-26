@@ -4,6 +4,8 @@
 #include <esp_matter_bridge.h>
 #include <esp_matter_endpoint.h>
 #include <esp_netif.h>
+#include <stdlib.h>
+#include <string.h>
 
 static const char *TAG = "app_bridge";
 
@@ -182,10 +184,19 @@ esp_err_t bridge_add_device(const char *id, device_type_t type, const char *name
         return ESP_OK;
     }
 
+    // Make a copy of id for priv_data (HTTP buffer may be freed)
+    char *id_copy = strdup(id);
+    if (!id_copy) {
+        ESP_LOGE(TAG, "Failed to allocate id copy for %s", id);
+        return ESP_FAIL;
+    }
+
     esp_matter_bridge::device_t *dev = esp_matter_bridge::create_device(
-        s_node, s_aggregator_endpoint_id, matter_type_id, (void *)id);
+        s_node, s_aggregator_endpoint_id, matter_type_id, (void *)id_copy);
     if (!dev) {
-        ESP_LOGE(TAG, "Failed to create bridged device for %s", id);
+        ESP_LOGE(TAG, "Failed to create bridged device for %s (type 0x%04lx, aggregator ep=%d)",
+                 id, matter_type_id, s_aggregator_endpoint_id);
+        free(id_copy);
         return ESP_FAIL;
     }
 

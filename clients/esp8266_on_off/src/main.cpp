@@ -67,12 +67,12 @@ static bool http_post(const char *path, const String &body)
 {
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + path);
     s_http.addHeader("Content-Type", "application/json");
+    s_http.setTimeout(5000);
     int code = s_http.POST(body);
     bool ok = (code == 200);
     s_bridge_connected = ok;
     if (!ok) {
-        static unsigned long last_warn = 0;
-        if (millis() - last_warn > 30000) { last_warn = millis(); Serial.printf("[%s] POST %s -> %d\n", TAG, path, code); }
+        Serial.printf("[%s] POST %s -> %d\n", TAG, path, code);
     }
     s_http.end();
     return ok;
