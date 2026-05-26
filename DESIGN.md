@@ -11,24 +11,24 @@ Este documento define um sistema de design único que equilibra **leveza**
 ## 1. Paleta de Cores (Sistema Design)
 
 ```css
-/* Tema escuro (único suportado — economiza CSS de tema claro) */
---bg:         #0f172a;   /* Slate 900  — fundo da página */
---bg-card:    #1e293b;   /* Slate 800  — fundo do card */
---bg-hover:   #334155;   /* Slate 700  — hover em linhas/btns */
---text:       #e2e8f0;   /* Slate 100  — texto principal */
---text-dim:   #64748b;   /* Slate 500  — labels, metadados */
---text-muted: #475569;   /* Slate 600  — info secundária */
+/* Tema claro pastel — base Azul Bebê (#B2CEfE) */
+--bg:         #F4F7FC;   /* Azul Bebê claro  — fundo da página */
+--bg-card:    #FFFFFF;   /* Branco            — fundo do card */
+--bg-hover:   #E8EEF8;   /* Azul Bebê hover   — hover em linhas/btns */
+--text:       #2C3E50;   /* Azul escuro       — texto principal */
+--text-dim:   #7A8BA3;   /* Cinza azulado     — labels, metadados */
+--text-muted: #8FA0B8;   /* Cinza azulado+    — info secundária */
 
---accent:     #B2CEfE;   /* Azul Bebê  — títulos, links, bordas ativas */
---accent-alt: #8BAEF8;   /* Azul Bebê+ — variante bridge */
+--accent:     #B2CEfE;   /* Azul Bebê         — títulos, links, bordas ativas */
+--accent-alt: #8BAEF8;   /* Azul Bebê profundo— variante bridge */
 
---success:    #34d399;   /* Emerald 400 — ligado, online */
---success-bg: #065f46;   /* Emerald 900 — badge fundo on */
---danger:     #f87171;   /* Red 400    — desligado, offline, erro */
---danger-bg:  #7f1d1d;   /* Red 900    — badge fundo off */
+--success:    #2E7D32;   /* Verde escuro      — texto badge on */
+--success-bg: #E8F5E9;   /* Verde pastel      — badge fundo on */
+--danger:     #C62828;   /* Vermelho escuro   — texto badge off */
+--danger-bg:  #FFEBEE;   /* Vermelho pastel   — badge fundo off */
 
---warning:    #fbbf24;   /* Amber 400  — alertas */
---purple:     #a78bfa;   /* Violet 400 — tipo do dispositivo */
+--warning:    #F5C542;   /* Amarelo pastel    — alertas */
+--purple:     #9FA8DA;   /* Violeta pastel    — tipo do dispositivo */
 ```
 
 **Regras:**
@@ -44,8 +44,8 @@ Este documento define um sistema de design único que equilibra **leveza**
 *{margin:0;padding:0;box-sizing:border-box}
 body{
   font-family:system-ui,-apple-system,sans-serif;
-  background:var(--bg,#0f172a);
-  color:var(--text,#e2e8f0);
+  background:var(--bg,#F4F7FC);
+  color:var(--text,#2C3E50);
 }
 ```
 
@@ -69,7 +69,7 @@ body{
 
 ```css
 .card{
-  background:var(--bg-card,#1e293b);
+  background:var(--bg-card,#FFFFFF);
   border-radius:12px;
   padding:16px;
   margin-bottom:12px;
@@ -99,8 +99,8 @@ body{
   font-size:.7rem;
   font-weight:600;
 }
-.badge.on{background:var(--success-bg,#065f46);color:var(--success,#34d399)}
-.badge.off{background:var(--danger-bg,#7f1d1d);color:var(--danger,#f87171)}
+.badge.on{background:var(--success-bg,#E8F5E9);color:var(--success,#2E7D32)}
+.badge.off{background:var(--danger-bg,#FFEBEE);color:var(--danger,#C62828)}
 ```
 
 ### 4.2 Botões de Controle
@@ -115,8 +115,8 @@ body{
   -webkit-tap-highlight-color:transparent;
 }
 .btn:active{opacity:.7}
-.btn-on{background:var(--success,#34d399)}
-.btn-off{background:var(--danger,#f87171)}
+.btn-on{background:var(--success,#2E7D32)}
+.btn-off{background:var(--danger,#C62828)}
 .btn-accent{background:var(--accent,#B2CEfE)}
 ```
 
@@ -128,8 +128,8 @@ body{
   border-radius:50%;margin-right:6px;
   vertical-align:middle;
 }
-.led.on{background:var(--success,#34d399);box-shadow:0 0 6px var(--success,#34d399)}
-.led.off{background:var(--text-muted,#475569)}
+.led.on{background:var(--success,#2E7D32);box-shadow:0 0 6px var(--success,#2E7D32)}
+.led.off{background:var(--text-muted,#8FA0B8)}
 ```
 
 ### 4.4 Estado do Dispositivo (Valor Principal)
@@ -140,8 +140,8 @@ body{
   font-size:4rem;text-align:center;
   margin:.5rem 0;transition:color .3s;
 }
-.valor-status.on{color:var(--success,#34d399)}
-.valor-status.off{color:var(--text-muted,#475569)}
+.valor-status.on{color:var(--success,#2E7D32)}
+.valor-status.off{color:var(--text-muted,#8FA0B8)}
 
 /* Para sensor numérico */
 .valor-sensor{
@@ -153,32 +153,32 @@ body{
 ### 4.5 Info Row (Bridge Dashboard)
 
 ```css
-.row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;border-bottom:1px solid var(--bg-hover,#334155)}
+.row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;border-bottom:1px solid var(--bg-hover,#E8EEF8)}
 .row:last-child{border:none}
-.row .label{color:var(--text-dim,#64748b)}
-.row .value{color:var(--text,#e2e8f0)}
+.row .label{color:var(--text-dim,#7A8BA3)}
+.row .value{color:var(--text,#2C3E50)}
 ```
 
 ### 4.6 Stats Cards (Multi-dispositivo)
 
 ```css
 .stat{
-  background:var(--bg-card,#1e293b);
+  background:var(--bg-card,#FFFFFF);
   border-radius:12px;padding:12px 20px;
   text-align:center;flex:1;
 }
 .stat .num{font-size:1.8rem;font-weight:700;color:var(--accent,#B2CEfE)}
-.stat .label{font-size:.7rem;color:var(--text-dim,#64748b);text-transform:uppercase;letter-spacing:.5px}
+.stat .label{font-size:.7rem;color:var(--text-dim,#7A8BA3);text-transform:uppercase;letter-spacing:.5px}
 ```
 
 ### 4.7 Tabela (Multi-dispositivo)
 
 ```css
-table{width:100%;border-collapse:collapse;background:var(--bg-card,#1e293b);border-radius:12px;overflow:hidden}
-th{background:var(--bg-hover,#334155);padding:10px 12px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim,#64748b)}
-td{padding:10px 12px;border-top:1px solid var(--bg-hover,#334155);font-size:.82rem}
+table{width:100%;border-collapse:collapse;background:var(--bg-card,#FFFFFF);border-radius:12px;overflow:hidden}
+th{background:var(--bg-hover,#E8EEF8);padding:10px 12px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim,#7A8BA3)}
+td{padding:10px 12px;border-top:1px solid var(--bg-hover,#E8EEF8);font-size:.82rem}
 td.id{color:var(--accent,#B2CEfE);font-weight:600;font-family:monospace}
-td.type{color:var(--purple,#a78bfa)}
+td.type{color:var(--purple,#9FA8DA)}
 ```
 
 ---
@@ -243,7 +243,7 @@ if(!d.length){
 ```
 
 ```css
-.empty{padding:40px 16px;text-align:center;color:var(--text-dim,#64748b)}
+.empty{padding:40px 16px;text-align:center;color:var(--text-dim,#7A8BA3)}
 ```
 
 ### Error state
@@ -331,18 +331,18 @@ static const char PAGE_DASHBOARD[] PROGMEM = R"rawliteral(
 <style>
 /* === DESIGN SYSTEM === */
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#1e293b;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F4F7FC;color:#2C3E50;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#FFFFFF;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
 h1{font-size:1.3rem;color:#B2CEfE;margin-bottom:4px}
-.label{color:#64748b;font-size:.85rem;margin-bottom:16px}
+.label{color:#7A8BA3;font-size:.85rem;margin-bottom:16px}
 /* === COMPONENTES === */
 .valor-status{font-size:4rem;margin:.5rem 0;transition:color .3s}
-.valor-status.on{color:#34d399}.valor-status.off{color:#475569}
+.valor-status.on{color:#2E7D32}.valor-status.off{color:#8FA0B8}
 .btn{border:none;border-radius:10px;padding:.65rem 1.25rem;font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s;color:#fff;min-width:80px;-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:.7}
-.btn-on{background:#34d399}.btn-off{background:#f87171}.btn-accent{background:#B2CEfE}
+.btn-on{background:#2E7D32}.btn-off{background:#C62828}.btn-accent{background:#B2CEfE}
 .buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
-.info{color:#475569;font-size:.8rem;margin-top:16px;word-break:break-all}
+.info{color:#8FA0B8;font-size:.8rem;margin-top:16px;word-break:break-all}
 </style>
 </head>
 <body>

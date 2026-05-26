@@ -9,17 +9,17 @@ static const char PAGE_DASHBOARD[] PROGMEM = R"rawliteral(
 <title>ESP8266 On/Off</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#1e293b;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
-h1{font-size:1.3rem;color:#38bdf8;margin-bottom:4px}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F4F7FC;color:#2C3E50;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#FFFFFF;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
+h1{font-size:1.3rem;color:#B2CEfE;margin-bottom:4px}
 .valor-status{font-size:4rem;margin:.5rem 0;transition:color .3s}
-.valor-status.on{color:#34d399}.valor-status.off{color:#475569}
-.label{color:#64748b;font-size:.85rem;margin-bottom:12px}
+.valor-status.on{color:#2E7D32}.valor-status.off{color:#8FA0B8}
+.label{color:#7A8BA3;font-size:.85rem;margin-bottom:12px}
 .buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
 .btn{border:none;border-radius:10px;padding:.65rem 1.25rem;font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s;color:#fff;min-width:80px;-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:.7}
-.btn-on{background:#34d399}.btn-off{background:#f87171}.btn-accent{background:#38bdf8}
-.info{color:#475569;font-size:.8rem;margin-top:16px;word-break:break-all}
+.btn-on{background:#2E7D32}.btn-off{background:#C62828}.btn-accent{background:#B2CEfE}
+.info{color:#8FA0B8;font-size:.8rem;margin-top:16px;word-break:break-all}
 </style>
 </head>
 <body>

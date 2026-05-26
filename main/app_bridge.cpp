@@ -200,6 +200,10 @@ esp_err_t bridge_add_device(const char *id, device_type_t type, const char *name
         return ESP_FAIL;
     }
 
+    esp_matter_attr_val_t reachable = esp_matter_bool(true);
+    attribute::set(dev->endpoint, BridgedDeviceBasicInformation::Id,
+                   BridgedDeviceBasicInformation::Attributes::Reachable::Id, &reachable);
+
     endpoint::enable(dev->endpoint);
     uint16_t ep_id = endpoint::get_id(dev->endpoint);
     device_registry_set_endpoint_id(id, ep_id);

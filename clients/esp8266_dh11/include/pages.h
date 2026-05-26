@@ -9,12 +9,12 @@ static const char PAGE_DASHBOARD[] PROGMEM = R"rawliteral(
 <title>ESP8266 DHT11</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#1e293b;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
-h1{font-size:1.3rem;color:#38bdf8;margin-bottom:12px}
-.valor-sensor{font-size:2.5rem;margin:.25rem 0;color:#38bdf8}
-.label{color:#64748b;font-size:.85rem;margin-bottom:4px}
-.info{color:#475569;font-size:.8rem;margin-top:16px;word-break:break-all}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F4F7FC;color:#2C3E50;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#FFFFFF;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%}
+h1{font-size:1.3rem;color:#B2CEfE;margin-bottom:12px}
+.valor-sensor{font-size:2.5rem;margin:.25rem 0;color:#B2CEfE}
+.label{color:#7A8BA3;font-size:.85rem;margin-bottom:4px}
+.info{color:#8FA0B8;font-size:.8rem;margin-top:16px;word-break:break-all}
 </style>
 </head>
 <body>

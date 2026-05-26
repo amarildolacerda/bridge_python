@@ -646,29 +646,29 @@ esp_err_t wifi_server_start(void)
 <title>ESP-Matter Bridge</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;padding:16px}
-h1{font-size:1.2rem;color:#38bdf8;margin-bottom:4px}
-.sub{color:#64748b;font-size:.8rem;margin-bottom:16px}
-.card{background:#1e293b;border-radius:12px;padding:16px;margin-bottom:12px}
-.card h2{font-size:.9rem;color:#38bdf8;margin-bottom:8px}
-.row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;border-bottom:1px solid #334155}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F4F7FC;color:#2C3E50;padding:16px}
+h1{font-size:1.2rem;color:#B2CEfE;margin-bottom:4px}
+.sub{color:#7A8BA3;font-size:.8rem;margin-bottom:16px}
+.card{background:#FFFFFF;border-radius:12px;padding:16px;margin-bottom:12px}
+.card h2{font-size:.9rem;color:#B2CEfE;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;border-bottom:1px solid #E8EEF8}
 .row:last-child{border:none}
-.row .label{color:#64748b}
-.row .value{color:#e2e8f0}
+.row .label{color:#7A8BA3}
+.row .value{color:#2C3E50}
 .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.75rem;font-weight:600}
-.badge.on{background:#065f46;color:#34d399}
-.badge.off{background:#7f1d1d;color:#fca5a5}
-.device{margin-bottom:8px;padding:10px;background:#1e293b;border-radius:8px;border:1px solid #334155}
+.badge.on{background:#E8F5E9;color:#2E7D32}
+.badge.off{background:#FFEBEE;color:#C62828}
+.device{margin-bottom:8px;padding:10px;background:#FFFFFF;border-radius:8px;border:1px solid #E8EEF8}
 .device:last-child{margin-bottom:0}
-.dev-name{font-weight:600;font-size:.9rem;color:#e2e8f0}
-.dev-meta{font-size:.75rem;color:#64748b;margin:2px 0 4px}
-.dev-state{font-size:.82rem;color:#cbd5e1}
-.state-on{color:#34d399;font-weight:600}
-.state-off{color:#f87171;font-weight:600}
+.dev-name{font-weight:600;font-size:.9rem;color:#2C3E50}
+.dev-meta{font-size:.75rem;color:#7A8BA3;margin:2px 0 4px}
+.dev-state{font-size:.82rem;color:#7A8BA3}
+.state-on{color:#2E7D32;font-weight:600}
+.state-off{color:#C62828;font-weight:600}
 .led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.led.on{background:#34d399;box-shadow:0 0 6px #34d399}
-.led.off{background:#475569}
-.empty{text-align:center;padding:40px 16px;color:#64748b}
+.led.on{background:#2E7D32;box-shadow:0 0 6px #2E7D32}
+.led.off{background:#8FA0B8}
+.empty{text-align:center;padding:40px 16px;color:#7A8BA3}
 </style>
 </head>
 <body>
@@ -679,7 +679,7 @@ h1{font-size:1.2rem;color:#38bdf8;margin-bottom:4px}
 <div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div></div>
 </div>
 <div class="card">
-<h2>Dispositivos <span id="dev-count" style="color:#94a3b8;font-weight:400"></span></h2>
+<h2>Dispositivos <span id="dev-count" style="color:#7A8BA3;font-weight:400"></span></h2>
 <div id="devices"><div class="empty">carregando...</div></div>
 </div>
 <script>
@@ -693,7 +693,7 @@ document.getElementById('bridge-info').innerHTML=
 '<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>'+
 '<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.free_heap/1024).toFixed(0)+' KB</span></div>';
 document.getElementById('sub').textContent='IP: '+b.ip;
-}catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:#f87171">Erro de conex\u00E3o</span></div>'}
+}catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:#C62828">Erro de conex\u00E3o</span></div>'}
 
 try{
 let r=await fetch('/api/devices');
@@ -709,7 +709,7 @@ if('on' in st)stHtml='<span class="'+(st.on?'state-on':'state-off')+'">'+(st.on?
 else if('temperature' in st)stHtml=st.temperature.toFixed(1)+'\u00B0C '+(st.humidity!=null?st.humidity.toFixed(0)+'%':'');
 else if('contact' in st)stHtml=st.contact?'ABERTO':'FECHADO';
 else if('occupancy' in st)stHtml=st.occupancy?'MOVIMENTO':'LIVRE';
-else stHtml='<span style="color:#64748b">—</span>';
+else stHtml='<span style="color:#7A8BA3">—</span>';
 h+='<div class="device">'+
 '<div><span class="led '+(dev.online?'on':'off')+'"></span><span class="dev-name">'+dev.name+'</span> <span class="badge '+(dev.online?'on':'off')+'">'+(dev.online?'online':'offline')+'</span></div>'+
 '<div class="dev-meta">'+dev.type+' &middot; ep '+dev.endpoint_id+'</div>'+
@@ -717,7 +717,7 @@ h+='<div class="device">'+
 }
 document.getElementById('devices').innerHTML=h||'<div class="empty">Nenhum dispositivo registrado</div>';
 document.getElementById('dev-count').textContent='('+on+'/'+devs.length+' online)';
-}catch(e){document.getElementById('devices').innerHTML='<div class="empty" style="color:#f87171">Erro ao carregar dispositivos</div>'}
+}catch(e){document.getElementById('devices').innerHTML='<div class="empty" style="color:#C62828">Erro ao carregar dispositivos</div>'}
 }
 load();setInterval(load,5000);
 </script>
