@@ -5,13 +5,17 @@ services:
     
     ports:
       - "8080:8080"
+      - "5000:5000/udp"
+      
         
     volumes:
       - C:\git\bridge:/project
       - idf_cache:/root/.espressif
+      - ccache:/root/.ccache
     
     environment:
       - IDF_TARGET=esp32
+      - CCACHE_DIR=/root/.ccache
     
     command: /bin/bash -c "export IDF_TARGET=esp32 && source /opt/espressif/esp-matter/export.sh && source /opt/espressif/esp-idf/export.sh && cd /project && tail -f /dev/null"
 
@@ -42,6 +46,8 @@ networks:
 volumes:
   idf_cache:
     name: idf_cache
+  ccache:
+    name: ccache
   opencode_config:
     name: opencode_config
   opencode_data:
