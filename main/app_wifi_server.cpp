@@ -18,6 +18,11 @@
 static const char *TAG = "wifi_server";
 static httpd_handle_t s_server = NULL;
 
+extern const char dashboard_html_start[] asm("_binary_web_dashboard_html_start");
+extern const char dashboard_html_end[] asm("_binary_web_dashboard_html_end");
+extern const char dashboard_css_start[] asm("_binary_web_dashboard_css_start");
+extern const char dashboard_css_end[] asm("_binary_web_dashboard_css_end");
+
 #define SCRATCH_BUFSIZE 8192
 
 // UDP Discovery
@@ -221,6 +226,13 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     const char *type_str = type_item->valuestring;
     const char *name = name_item ? name_item->valuestring : id;
 
+    char client_ip[16] = "0.0.0.0";
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    if (getpeername(httpd_req_to_sockfd(req), (struct sockaddr *)&addr, &addr_len) == 0) {
+        inet_ntop(AF_INET, &addr.sin_addr, client_ip, sizeof(client_ip));
+    }
+
     device_type_t type = device_type_from_string(type_str);
     if (type == DEVICE_TYPE_UNKNOWN) {
         cJSON_Delete(root);
@@ -229,7 +241,7 @@ static esp_err_t register_device_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    int slot = device_registry_register(id, type, name);
+    int slot = device_registry_register(id, type, name, client_ip);
     if (slot < 0) {
         cJSON_Delete(root);
         free(buf);
@@ -453,6 +465,7 @@ static esp_err_t device_info_handler(httpd_req_t *req)
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "id", dev->id);
     cJSON_AddStringToObject(resp, "name", dev->name);
+    cJSON_AddStringToObject(resp, "ip", dev->ip);
     cJSON_AddStringToObject(resp, "type", device_type_to_string(dev->type));
     cJSON_AddNumberToObject(resp, "endpoint_id", dev->matter_endpoint_id);
     cJSON_AddBoolToObject(resp, "online", dev->online);
@@ -486,6 +499,24 @@ static esp_err_t ping_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t send_embedded_asset(httpd_req_t *req, const char *start, const char *end, const char *content_type)
+{
+    httpd_resp_set_type(req, content_type);
+    size_t len = (size_t)(end - start);
+    httpd_resp_send(req, start, len);
+    return ESP_OK;
+}
+
+static esp_err_t dashboard_html_handler(httpd_req_t *req)
+{
+    return send_embedded_asset(req, dashboard_html_start, dashboard_html_end, "text/html");
+}
+
+static esp_err_t dashboard_css_handler(httpd_req_t *req)
+{
+    return send_embedded_asset(req, dashboard_css_start, dashboard_css_end, "text/css");
+}
+
 static esp_err_t bridge_info_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
@@ -515,6 +546,7 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
             cJSON *item = cJSON_CreateObject();
             cJSON_AddStringToObject(item, "id", devices[i].id);
             cJSON_AddStringToObject(item, "name", devices[i].name);
+            cJSON_AddStringToObject(item, "ip", devices[i].ip);
             cJSON_AddStringToObject(item, "type", device_type_to_string(devices[i].type));
             cJSON_AddNumberToObject(item, "endpoint_id", devices[i].matter_endpoint_id);
             cJSON_AddBoolToObject(item, "online", devices[i].online);
@@ -634,6 +666,8 @@ esp_err_t wifi_server_start(void)
         .uri = "/",
         .method = HTTP_GET,
         .handler = [](httpd_req_t *r) -> esp_err_t {
+            return dashboard_html_handler(r);
+#if 0
             const char *html = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -707,9 +741,10 @@ else if('temperature' in st)stHtml=st.temperature.toFixed(1)+'\u00B0C '+(st.humi
 else if('contact' in st)stHtml=st.contact?'ABERTO':'FECHADO';
 else if('occupancy' in st)stHtml=st.occupancy?'MOVIMENTO':'LIVRE';
 else stHtml='<span style="color:#7A8BA3">—</span>';
+let ipLink=dev.ip&&dev.ip!='0.0.0.0'?'<a href="http://'+dev.ip+'" target="_blank" style="color:#3498DB;text-decoration:none">'+dev.ip+'</a>':'—';
 h+='<div class="device">'+
 '<div><span class="led '+(dev.online?'on':'off')+'"></span><span class="dev-name">'+dev.name+'</span> <span class="badge '+(dev.online?'on':'off')+'">'+(dev.online?'online':'offline')+'</span></div>'+
-'<div class="dev-meta">'+dev.type+' &middot; ep '+dev.endpoint_id+'</div>'+
+'<div class="dev-meta">'+dev.type+' &middot; ep '+dev.endpoint_id+' &middot; '+ipLink+'</div>'+
 '<div class="dev-state">'+stHtml+'</div></div>';
 }
 document.getElementById('devices').innerHTML=h||'<div class="empty">Nenhum dispositivo registrado</div>';
@@ -720,14 +755,23 @@ load();setInterval(load,5000);
 </script>
 </body>
 </html>
-)rawliteral";
+ )rawliteral";
             httpd_resp_set_type(r, "text/html");
             httpd_resp_sendstr(r, html);
             return ESP_OK;
+#endif
         },
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &root_uri);
+
+    httpd_uri_t css_uri = {
+        .uri = "/dashboard.css",
+        .method = HTTP_GET,
+        .handler = dashboard_css_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &css_uri);
 
     err = start_udp_discovery();
     if (err != ESP_OK) {

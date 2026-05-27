@@ -237,6 +237,7 @@ idf.py size-components  # Detalhado por componente
 14. sempre que possivel o dispositivo deve ter uma dashboard proprio
 15. sempre perguntar se deseja executar build, e se for executar sempre usar cached
 16. a comunicação com o bridge não pode ser bloqueante
+17. quando for criar ou ajustar dashboard web, reutilizar a paleta leve inspirada no Dashforge: fundo `#f4f7fc`/`#f8fbff`, surface `#ffffff`, surface-2 `#f9fbff`, texto `#24324a`, muted `#7a8ba3`, primary `#3498db`, primary-strong `#2d7dff`, border `#e6edf7`, success `#2e7d32`, danger `#c62828`; manter o CSS em arquivo separado e evitar incluir o template completo
 ```sh
 
 ```

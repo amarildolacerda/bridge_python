@@ -98,15 +98,23 @@ esp_err_t device_registry_init(void)
     return ESP_OK;
 }
 
-int device_registry_register(const char *id, device_type_t type, const char *name)
+int device_registry_register(const char *id, device_type_t type, const char *name, const char *ip)
 {
     if (!s_registry_mutex) return -1;
     xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
 
-    if (find_device_by_id(id) >= 0) {
-        ESP_LOGW(TAG, "Device %s already registered, updating", id);
+    int existing = find_device_by_id(id);
+    if (existing >= 0) {
+        bridged_device_t *dev = &s_devices[existing];
+        strncpy(dev->name, name ? name : id, MAX_DEVICE_NAME_LEN - 1);
+        dev->name[MAX_DEVICE_NAME_LEN - 1] = '\0';
+        strncpy(dev->ip, ip ? ip : "0.0.0.0", sizeof(dev->ip) - 1);
+        dev->ip[sizeof(dev->ip) - 1] = '\0';
+        dev->type = type;
+        dev->registered = true;
+        ESP_LOGW(TAG, "Device %s already registered, refreshed metadata", id);
         xSemaphoreGive(s_registry_mutex);
-        return find_device_by_id(id);
+        return existing;
     }
 
     int slot = find_device_slot();
@@ -121,6 +129,8 @@ int device_registry_register(const char *id, device_type_t type, const char *nam
     dev->id[MAX_DEVICE_ID_LEN - 1] = '\0';
     strncpy(dev->name, name ? name : id, MAX_DEVICE_NAME_LEN - 1);
     dev->name[MAX_DEVICE_NAME_LEN - 1] = '\0';
+    strncpy(dev->ip, ip ? ip : "0.0.0.0", sizeof(dev->ip) - 1);
+    dev->ip[sizeof(dev->ip) - 1] = '\0';
     dev->type = type;
     dev->registered = true;
     dev->matter_endpoint_id = 0;
@@ -177,33 +187,75 @@ esp_err_t device_registry_update_state(const char *id, const char *key, const ch
     }
 
     bridged_device_t *dev = &s_devices[idx];
-    char *state = dev->state_json;
-    int state_len = strlen(state);
+    char current[MAX_DEVICE_STATE_LEN];
+    char next_state[MAX_DEVICE_STATE_LEN];
+    strncpy(current, dev->state_json, sizeof(current) - 1);
+    current[sizeof(current) - 1] = '\0';
+    next_state[0] = '\0';
 
-    char entry[MAX_DEVICE_STATE_LEN];
-    snprintf(entry, sizeof(entry), "%s=%s", key, value);
+    bool replaced = false;
+    char *token = strtok(current, "|");
+    while (token) {
+        char *eq = strchr(token, '=');
+        if (eq) {
+            *eq = '\0';
+            const char *entry_key = token;
+            const char *entry_value = (strcmp(entry_key, key) == 0) ? value : (eq + 1);
 
-    char *found_key = strstr(state, key);
-    if (found_key) {
-        char *sep = found_key + strlen(key);
-        if (sep < state + state_len && *sep == '=') {
-            char *old_val_end = sep + 1;
-            char *next = strchr(old_val_end, '|');
-            int old_len = next ? (next - sep) : (state + state_len - sep);
-            int new_len = strlen(entry);
-            if (old_len != new_len) {
-                memmove(sep + new_len, sep + old_len, state + state_len - (sep + old_len) + 1);
+            char entry[MAX_DEVICE_STATE_LEN];
+            int written = snprintf(entry, sizeof(entry), "%s=%s", entry_key, entry_value);
+            if (written > 0 && written < (int)sizeof(entry)) {
+                size_t cur_len = strlen(next_state);
+                size_t add_len = strlen(entry);
+                if (cur_len > 0) {
+                    if (cur_len + 1 >= sizeof(next_state)) {
+                        xSemaphoreGive(s_registry_mutex);
+                        return ESP_ERR_NO_MEM;
+                    }
+                    next_state[cur_len++] = '|';
+                    next_state[cur_len] = '\0';
+                }
+                if (cur_len + add_len >= sizeof(next_state)) {
+                    xSemaphoreGive(s_registry_mutex);
+                    return ESP_ERR_NO_MEM;
+                }
+                memcpy(next_state + cur_len, entry, add_len + 1);
             }
-            memcpy(sep, entry + (key - found_key), new_len);
-            xSemaphoreGive(s_registry_mutex);
-            return ESP_OK;
+
+            if (strcmp(entry_key, key) == 0) {
+                replaced = true;
+            }
         }
+        token = strtok(NULL, "|");
     }
 
-    if (state_len > 0) {
-        strncat(state, "|", MAX_DEVICE_STATE_LEN - strlen(state) - 1);
+    if (!replaced) {
+        char entry[MAX_DEVICE_STATE_LEN];
+        int written = snprintf(entry, sizeof(entry), "%s=%s", key, value);
+        if (written <= 0 || written >= (int)sizeof(entry)) {
+            xSemaphoreGive(s_registry_mutex);
+            return ESP_ERR_NO_MEM;
+        }
+
+        size_t cur_len = strlen(next_state);
+        size_t add_len = strlen(entry);
+        if (cur_len > 0) {
+            if (cur_len + 1 >= sizeof(next_state)) {
+                xSemaphoreGive(s_registry_mutex);
+                return ESP_ERR_NO_MEM;
+            }
+            next_state[cur_len++] = '|';
+            next_state[cur_len] = '\0';
+        }
+        if (cur_len + add_len >= sizeof(next_state)) {
+            xSemaphoreGive(s_registry_mutex);
+            return ESP_ERR_NO_MEM;
+        }
+        memcpy(next_state + cur_len, entry, add_len + 1);
     }
-    strncat(state, entry, MAX_DEVICE_STATE_LEN - strlen(state) - 1);
+
+    strncpy(dev->state_json, next_state, sizeof(dev->state_json) - 1);
+    dev->state_json[sizeof(dev->state_json) - 1] = '\0';
 
     ESP_LOGI(TAG, "Device %s state update: %s = %s", id, key, value);
     xSemaphoreGive(s_registry_mutex);
@@ -229,9 +281,12 @@ esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster,
 
     pending_command_t *pc = &dev->pending_commands[dev->pending_command_count++];
     strncpy(pc->cluster, cluster, sizeof(pc->cluster) - 1);
+    pc->cluster[sizeof(pc->cluster) - 1] = '\0';
     strncpy(pc->command, command, sizeof(pc->command) - 1);
+    pc->command[sizeof(pc->command) - 1] = '\0';
     if (data) strncpy(pc->data, data, MAX_COMMAND_DATA_LEN - 1);
     else pc->data[0] = '\0';
+    pc->data[MAX_COMMAND_DATA_LEN - 1] = '\0';
 
     ESP_LOGI(TAG, "Command queued for %s: %s/%s", dev->id, cluster, command);
     xSemaphoreGive(s_registry_mutex);

@@ -32,6 +32,7 @@ typedef struct {
 typedef struct {
     char id[MAX_DEVICE_ID_LEN];
     char name[MAX_DEVICE_NAME_LEN];
+    char ip[16];
     device_type_t type;
     bool registered;
     uint16_t matter_endpoint_id;
@@ -46,7 +47,7 @@ const char *device_type_to_string(device_type_t type);
 uint32_t device_type_to_matter_id(device_type_t type);
 
 esp_err_t device_registry_init(void);
-int device_registry_register(const char *id, device_type_t type, const char *name);
+int device_registry_register(const char *id, device_type_t type, const char *name, const char *ip);
 bridged_device_t *device_registry_get_by_id(const char *id);
 bridged_device_t *device_registry_get_by_endpoint(uint16_t endpoint_id);
 bridged_device_t *device_registry_get_all(int *count);
