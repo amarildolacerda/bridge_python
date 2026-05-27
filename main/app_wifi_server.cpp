@@ -89,9 +89,10 @@ static void send_udp_broadcast(void)
     if (strcmp(s_bridge_ip, "0.0.0.0") == 0) return;
 
     char resp[256];
+    uint64_t uptime_s = esp_timer_get_time() / 1000000;
     snprintf(resp, sizeof(resp),
-        "{\"service\":\"esp-matter-bridge\",\"ip_sta\":\"%s\",\"http_port\":80}",
-        s_bridge_ip);
+        "{\"service\":\"esp-matter-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
+        s_bridge_ip, uptime_s);
 
     struct sockaddr_in bcast_addr;
     bcast_addr.sin_family = AF_INET;
