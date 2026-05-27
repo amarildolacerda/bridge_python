@@ -12,4 +12,9 @@ if %errorlevel% neq 0 (
         if %errorlevel% neq 0 exit /b %errorlevel%
     )
 )
-docker exec -it esp-matter-dev /bin/bash -c "cd /project && source config.sh && exec /bin/bash"
+docker exec esp-matter-dev /bin/bash -c "cd /project && source config.sh && idf.py build"
+if %errorlevel% neq 0 (
+    echo Build failed.
+    exit /b %errorlevel%
+)
+echo Build successful.

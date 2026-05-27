@@ -18,10 +18,10 @@
 static const char *TAG = "wifi_server";
 static httpd_handle_t s_server = NULL;
 
-extern const char dashboard_html_start[] asm("_binary_web_dashboard_html_start");
-extern const char dashboard_html_end[] asm("_binary_web_dashboard_html_end");
-extern const char dashboard_css_start[] asm("_binary_web_dashboard_css_start");
-extern const char dashboard_css_end[] asm("_binary_web_dashboard_css_end");
+extern const char dashboard_html_start[] asm("_binary_dashboard_html_start");
+extern const char dashboard_html_end[] asm("_binary_dashboard_html_end");
+extern const char dashboard_css_start[] asm("_binary_dashboard_css_start");
+extern const char dashboard_css_end[] asm("_binary_dashboard_css_end");
 
 #define SCRATCH_BUFSIZE 8192
 
@@ -582,7 +582,7 @@ esp_err_t wifi_server_start(void)
     config.server_port = 80;
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 14;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {
@@ -665,102 +665,7 @@ esp_err_t wifi_server_start(void)
     httpd_uri_t root_uri = {
         .uri = "/",
         .method = HTTP_GET,
-        .handler = [](httpd_req_t *r) -> esp_err_t {
-            return dashboard_html_handler(r);
-#if 0
-            const char *html = R"rawliteral(
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP-Matter Bridge</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#F4F7FC;color:#2C3E50;padding:16px}
-h1{font-size:1.2rem;color:#B2CEfE;margin-bottom:4px}
-.sub{color:#7A8BA3;font-size:.8rem;margin-bottom:16px}
-.card{background:#FFFFFF;border-radius:12px;padding:16px;margin-bottom:12px}
-.card h2{font-size:.9rem;color:#B2CEfE;margin-bottom:8px}
-.row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;border-bottom:1px solid #E8EEF8}
-.row:last-child{border:none}
-.row .label{color:#7A8BA3}
-.row .value{color:#2C3E50}
-.badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.75rem;font-weight:600}
-.badge.on{background:#E8F5E9;color:#2E7D32}
-.badge.off{background:#FFEBEE;color:#C62828}
-.device{margin-bottom:8px;padding:10px;background:#FFFFFF;border-radius:8px;border:1px solid #E8EEF8}
-.device:last-child{margin-bottom:0}
-.dev-name{font-weight:600;font-size:.9rem;color:#2C3E50}
-.dev-meta{font-size:.75rem;color:#7A8BA3;margin:2px 0 4px}
-.dev-state{font-size:.82rem;color:#7A8BA3}
-.state-on{color:#2E7D32;font-weight:600}
-.state-off{color:#C62828;font-weight:600}
-.led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.led.on{background:#2E7D32;box-shadow:0 0 6px #2E7D32}
-.led.off{background:#8FA0B8}
-.empty{text-align:center;padding:40px 16px;color:#7A8BA3}
-</style>
-</head>
-<body>
-<h1>ESP-Matter Bridge</h1>
-<div class="sub" id="sub">carregando...</div>
-<div class="card">
-<h2>Bridge</h2>
-<div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div></div>
-</div>
-<div class="card">
-<h2>Dispositivos <span id="dev-count" style="color:#7A8BA3;font-weight:400"></span></h2>
-<div id="devices"><div class="empty">carregando...</div></div>
-</div>
-<script>
-async function load(){try{
-let r=await fetch('/api/bridge/info');
-let b=await r.json();
-let u=b.uptime_s|0;
-let uptime=''+(u>86400?Math.floor(u/86400)+'d ':'')+Math.floor((u%86400)/3600)+'h'+Math.floor((u%3600)/60)+'m'+u%60+'s';
-document.getElementById('bridge-info').innerHTML=
-'<div class="row"><span class="label">IP</span><span class="value">'+b.ip+'</span></div>'+
-'<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>'+
-'<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.free_heap/1024).toFixed(0)+' KB</span></div>';
-document.getElementById('sub').textContent='IP: '+b.ip;
-}catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:#C62828">Erro de conex\u00E3o</span></div>'}
-
-try{
-let r=await fetch('/api/devices');
-let d=await r.json();
-let devs=d.devices||[];
-let h='';
-let on=0;
-for(let dev of devs){
-if(dev.online)on++;
-let st=dev.state||{};
-let stHtml='';
-if('on' in st)stHtml='<span class="'+(st.on?'state-on':'state-off')+'">'+(st.on?'LIGADO':'DESLIGADO')+'</span>';
-else if('temperature' in st)stHtml=st.temperature.toFixed(1)+'\u00B0C '+(st.humidity!=null?st.humidity.toFixed(0)+'%':'');
-else if('contact' in st)stHtml=st.contact?'ABERTO':'FECHADO';
-else if('occupancy' in st)stHtml=st.occupancy?'MOVIMENTO':'LIVRE';
-else stHtml='<span style="color:#7A8BA3">—</span>';
-let ipLink=dev.ip&&dev.ip!='0.0.0.0'?'<a href="http://'+dev.ip+'" target="_blank" style="color:#3498DB;text-decoration:none">'+dev.ip+'</a>':'—';
-h+='<div class="device">'+
-'<div><span class="led '+(dev.online?'on':'off')+'"></span><span class="dev-name">'+dev.name+'</span> <span class="badge '+(dev.online?'on':'off')+'">'+(dev.online?'online':'offline')+'</span></div>'+
-'<div class="dev-meta">'+dev.type+' &middot; ep '+dev.endpoint_id+' &middot; '+ipLink+'</div>'+
-'<div class="dev-state">'+stHtml+'</div></div>';
-}
-document.getElementById('devices').innerHTML=h||'<div class="empty">Nenhum dispositivo registrado</div>';
-document.getElementById('dev-count').textContent='('+on+'/'+devs.length+' online)';
-}catch(e){document.getElementById('devices').innerHTML='<div class="empty" style="color:#C62828">Erro ao carregar dispositivos</div>'}
-}
-load();setInterval(load,5000);
-</script>
-</body>
-</html>
- )rawliteral";
-            httpd_resp_set_type(r, "text/html");
-            httpd_resp_sendstr(r, html);
-            return ESP_OK;
-#endif
-        },
+        .handler = dashboard_html_handler,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &root_uri);
