@@ -46,6 +46,9 @@ CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 # Enable OTA Requestor
 CONFIG_ENABLE_OTA_REQUESTOR=y
 
+# Enable WebSocket support for /ws endpoint
+CONFIG_HTTPD_WS_SUPPORT=y
+
 # Enable HKDF in mbedtls
 CONFIG_MBEDTLS_HKDF_C=y
 

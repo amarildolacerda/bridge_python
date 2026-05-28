@@ -32,10 +32,10 @@ services:
       - opencode_config:/root/.config/opencode
       - opencode_data:/root/.local/share/opencode
     
-    # Remove o command complexo, usa apenas o padrão da imagem
+    command: ["serve", "--mdns", "--port", "3000", "--hostname", "0.0.0.0"]
     stdin_open: true
     tty: true
-    
+
     networks:
       - esp-net
 

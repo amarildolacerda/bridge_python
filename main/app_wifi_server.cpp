@@ -32,6 +32,10 @@ extern const char dashboard_css_end[] asm("_binary_dashboard_css_end");
 static TaskHandle_t s_udp_task = NULL;
 static int s_udp_socket = -1;
 
+// WebSocket monitor
+static int s_ws_fd = -1;
+static httpd_handle_t s_ws_hd = NULL;
+
 static char s_bridge_ip[16] = "0.0.0.0";
 
 void wifi_server_update_ip(const char *ip)
@@ -500,6 +504,58 @@ static esp_err_t ping_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t ws_handler(httpd_req_t *req)
+{
+    if (req->method == HTTP_GET) {
+        esp_err_t ret = httpd_ws_upgrade(req);
+        if (ret != ESP_OK) return ret;
+        s_ws_hd = req->handle;
+        s_ws_fd = httpd_req_to_sockfd(req);
+        ESP_LOGI(TAG, "WS client connected fd=%d", s_ws_fd);
+        return ESP_OK;
+    }
+
+    httpd_ws_frame_t frame;
+    memset(&frame, 0, sizeof(frame));
+    frame.type = HTTPD_WS_TYPE_TEXT;
+    esp_err_t ret = httpd_ws_recv_frame(req, &frame, 0);
+    if (ret != ESP_OK) {
+        s_ws_fd = -1;
+        s_ws_hd = NULL;
+        ESP_LOGI(TAG, "WS client disconnected");
+    }
+    return ret;
+}
+
+static void ws_monitor_task(void *pv)
+{
+    while (1) {
+        if (s_ws_fd >= 0 && s_ws_hd) {
+            uint64_t uptime_s = esp_timer_get_time() / 1000000;
+            char json[256];
+            int len = snprintf(json, sizeof(json),
+                "{\"t\":\"state\",\"ip\":\"%s\",\"uptime_s\":%llu,"
+                "\"free_heap\":%lu,\"min_free_heap\":%lu}",
+                s_bridge_ip, uptime_s,
+                (unsigned long)esp_get_free_heap_size(), (unsigned long)esp_get_minimum_free_heap_size());
+
+            httpd_ws_frame_t frame = {
+                .type = HTTPD_WS_TYPE_TEXT,
+                .payload = (uint8_t *)json,
+                .len = len
+            };
+            esp_err_t ret = httpd_ws_send_frame_async(s_ws_hd, s_ws_fd, &frame);
+            if (ret != ESP_OK) {
+                s_ws_fd = -1;
+                s_ws_hd = NULL;
+                ESP_LOGI(TAG, "WS send failed, client removed");
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+    vTaskDelete(NULL);
+}
+
 static esp_err_t send_embedded_asset(httpd_req_t *req, const char *start, const char *end, const char *content_type)
 {
     httpd_resp_set_type(req, content_type);
@@ -679,6 +735,16 @@ esp_err_t wifi_server_start(void)
     };
     httpd_register_uri_handler(s_server, &css_uri);
 
+    httpd_uri_t ws_uri = {
+        .uri = "/ws",
+        .method = HTTP_GET,
+        .handler = ws_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &ws_uri);
+
+    xTaskCreatePinnedToCore(ws_monitor_task, "ws_monitor", 3072, NULL, 5, NULL, tskNO_AFFINITY);
+
     err = start_udp_discovery();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to start UDP discovery (non-fatal)");
@@ -691,6 +757,8 @@ esp_err_t wifi_server_start(void)
 esp_err_t wifi_server_stop(void)
 {
     stop_udp_discovery();
+    s_ws_fd = -1;
+    s_ws_hd = NULL;
     if (s_server) {
         httpd_stop(s_server);
         s_server = NULL;
