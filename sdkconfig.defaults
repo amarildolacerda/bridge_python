@@ -46,6 +46,9 @@ CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 # Enable OTA Requestor
 CONFIG_ENABLE_OTA_REQUESTOR=y
 
+# Disable brownout detector to prevent reboots on USB power dip
+CONFIG_BROWNOUT_DET=n
+
 # Enable WebSocket support for /ws endpoint
 CONFIG_HTTPD_WS_SUPPORT=y
 

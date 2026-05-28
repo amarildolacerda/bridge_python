@@ -263,6 +263,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "Device registered: %s (type: %s, slot: %d)", id, type_str, slot);
+
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", "ok");
@@ -272,8 +274,68 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     free((void *)resp_str);
     cJSON_Delete(resp);
     cJSON_Delete(root);
+    free(buf);
+    return ESP_OK;
+}
 
-    ESP_LOGI(TAG, "Device registered: %s (type: %s, slot: %d)", id, type_str, slot);
+static esp_err_t remove_device_handler(httpd_req_t *req)
+{
+    int total_len = req->content_len;
+    if (total_len >= SCRATCH_BUFSIZE) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+        return ESP_FAIL;
+    }
+
+    char *buf = (char *)malloc(SCRATCH_BUFSIZE);
+    if (!buf) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
+        return ESP_FAIL;
+    }
+
+    int received = 0, cur_len = 0;
+    while (cur_len < total_len) {
+        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
+        if (received <= 0) {
+            free(buf);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
+        return ESP_FAIL;
+    }
+
+    cJSON *id_item = cJSON_GetObjectItem(root, "id");
+    if (!id_item || !id_item->valuestring) {
+        cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
+        return ESP_FAIL;
+    }
+
+    const char *id = id_item->valuestring;
+    esp_err_t err = bridge_remove_device(id);
+    if (err != ESP_OK) {
+        cJSON_Delete(root);
+        free(buf);
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "status", "ok");
+    const char *resp_str = cJSON_Print(resp);
+    httpd_resp_sendstr(req, resp_str);
+    free((void *)resp_str);
+    cJSON_Delete(resp);
+    cJSON_Delete(root);
     free(buf);
     return ESP_OK;
 }
@@ -507,8 +569,6 @@ static esp_err_t ping_handler(httpd_req_t *req)
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        esp_err_t ret = httpd_ws_upgrade(req);
-        if (ret != ESP_OK) return ret;
         s_ws_hd = req->handle;
         s_ws_fd = httpd_req_to_sockfd(req);
         ESP_LOGI(TAG, "WS client connected fd=%d", s_ws_fd);
@@ -531,6 +591,14 @@ static void ws_monitor_task(void *pv)
 {
     while (1) {
         if (s_ws_fd >= 0 && s_ws_hd) {
+            if (httpd_ws_get_fd_info(s_ws_hd, s_ws_fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+                s_ws_fd = -1;
+                s_ws_hd = NULL;
+                ESP_LOGI(TAG, "WS client disconnected");
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                continue;
+            }
+
             uint64_t uptime_s = esp_timer_get_time() / 1000000;
             char json[256];
             int len = snprintf(json, sizeof(json),
@@ -542,7 +610,7 @@ static void ws_monitor_task(void *pv)
             httpd_ws_frame_t frame = {
                 .type = HTTPD_WS_TYPE_TEXT,
                 .payload = (uint8_t *)json,
-                .len = len
+                .len = (size_t)len
             };
             esp_err_t ret = httpd_ws_send_frame_async(s_ws_hd, s_ws_fd, &frame);
             if (ret != ESP_OK) {
@@ -655,6 +723,14 @@ esp_err_t wifi_server_start(void)
     };
     httpd_register_uri_handler(s_server, &register_uri);
 
+    httpd_uri_t remove_uri = {
+        .uri = "/api/device/remove",
+        .method = HTTP_POST,
+        .handler = remove_device_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &remove_uri);
+
     httpd_uri_t state_uri = {
         .uri = "/api/device/state",
         .method = HTTP_POST,
@@ -739,7 +815,8 @@ esp_err_t wifi_server_start(void)
         .uri = "/ws",
         .method = HTTP_GET,
         .handler = ws_handler,
-        .user_ctx = NULL
+        .user_ctx = NULL,
+        .is_websocket = true
     };
     httpd_register_uri_handler(s_server, &ws_uri);
 

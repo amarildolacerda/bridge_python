@@ -27,6 +27,9 @@
 
 #include <string>
 #include <string.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 static const char *TAG = "app_main";
 
@@ -43,6 +46,9 @@ using chip::RendezvousInformationFlag;
 
 static char s_manual_code[32] = {0};
 static char s_qr_payload[256] = {0};
+
+// Mutex for protecting Matter operations
+static SemaphoreHandle_t xMatterMutex = NULL;
 
 const char *onboarding_get_manual_code(void) { return s_manual_code; }
 const char *onboarding_get_qr_payload(void) { return s_qr_payload; }
@@ -78,7 +84,7 @@ static void print_onboarding_codes(void)
 }
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                                int32_t event_id, void *event_data)
+                                 int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "WiFi STA iniciado — aguardando conexão...");
@@ -103,17 +109,46 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
 
 extern "C" void app_main()
 {
+    // Add delay to let system stabilize before starting services
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
     esp_err_t err = ESP_OK;
 
-    nvs_flash_init();
+    // Initialize NVS
+    err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize NVS: %s", esp_err_to_name(err));
+        return;
+    }
+
+    // Create mutex for protecting Matter operations
+    xMatterMutex = xSemaphoreCreateMutex();
+    if (xMatterMutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create Matter mutex");
+        return;
+    }
 
     esp_netif_init();
     esp_event_loop_create_default();
 
     device_registry_init();
 
-    err = bridge_init();
-    ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to initialize bridge, err:%d", err));
+    // Initialize bridge with mutex protection
+    if (xSemaphoreTake(xMatterMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+        err = bridge_init();
+        xSemaphoreGive(xMatterMutex);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
+            return;
+        }
+    } else {
+        ESP_LOGE(TAG, "Failed to take Matter mutex during bridge init");
+        return;
+    }
 
 #if CONFIG_ENABLE_ESP_INSIGHTS_TRACE
     enable_insights(insights_auth_key_start);
@@ -127,7 +162,10 @@ extern "C" void app_main()
 #endif
 
     err = wifi_server_start();
-    ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start HTTP server, err:%d", err));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
+        return;
+    }
 
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);

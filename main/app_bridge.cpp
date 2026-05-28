@@ -73,6 +73,7 @@ static void bridge_add_device_work(intptr_t arg)
 
     uint16_t ep_id = endpoint::get_id(dev->endpoint);
     device_registry_set_endpoint_id(work->id, ep_id);
+    set_reachable(dev->endpoint);
     ESP_LOGI(TAG, "Bridged device %s created on endpoint %d (Matter type 0x%04lx)",
              work->id, ep_id, matter_type_id);
     free(work);
@@ -144,6 +145,27 @@ static void bridge_update_matter_state_work(intptr_t arg)
     free(work);
 }
 
+static void bridge_remove_stale_endpoints_work(intptr_t arg)
+{
+    int max_devices = MAX_BRIDGED_DEVICE_COUNT;
+    uint16_t *endpoint_ids = (uint16_t *)calloc(max_devices, sizeof(uint16_t));
+    if (!endpoint_ids) return;
+
+    esp_err_t err = esp_matter_bridge::get_bridged_endpoint_ids(endpoint_ids);
+    if (err == ESP_OK) {
+        for (int i = 0; i < max_devices; i++) {
+            if (endpoint_ids[i] == 0) continue;
+            esp_matter_bridge::device_t *dev = esp_matter_bridge::resume_device(
+                s_node, endpoint_ids[i], NULL);
+            if (dev) {
+                esp_matter_bridge::remove_device(dev);
+                ESP_LOGI(TAG, "Removed stale bridge endpoint %d", endpoint_ids[i]);
+            }
+        }
+    }
+    free(endpoint_ids);
+}
+
 static void bridge_remove_device_work(intptr_t arg)
 {
     bridge_remove_work_t *work = (bridge_remove_work_t *)arg;
@@ -208,9 +230,6 @@ static esp_err_t device_type_callback(endpoint_t *ep, uint32_t device_type_id, v
     default:
         ESP_LOGE(TAG, "Unsupported device type: 0x%04lx", device_type_id);
         return ESP_ERR_INVALID_ARG;
-    }
-    if (err == ESP_OK) {
-        set_reachable(ep);
     }
     return err;
 }
@@ -314,17 +333,21 @@ esp_err_t bridge_init(void)
     s_aggregator_endpoint_id = endpoint::get_id(aggregator);
     ESP_LOGI(TAG, "Aggregator created with endpoint_id %d", s_aggregator_endpoint_id);
 
-    esp_err_t err = esp_matter::start(app_event_cb);
+    // Must be called before esp_matter::start()
+    esp_err_t err = esp_matter_bridge::initialize(s_node, device_type_callback);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_matter::start(app_event_cb);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start Matter: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = esp_matter_bridge::initialize(s_node, device_type_callback);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
-        return err;
-    }
+    // Remove stale bridge endpoints restored from NVS on the Matter thread
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(bridge_remove_stale_endpoints_work, (intptr_t)NULL);
 
     ESP_LOGI(TAG, "Bridge initialized successfully");
     return ESP_OK;
