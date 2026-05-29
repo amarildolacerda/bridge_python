@@ -64,7 +64,7 @@ main/
 
 clients/
 └── esp8266_on_off/           # Firmware ESP8266 (on/off)
-    ├── src/main.cpp          # WiFi, MQTT, REST, web page
+    ├── src/main.cpp          # WiFi, REST API, web page
     ├── include/config.h      # Configuração do dispositivo
     └── test/                 # Testes da API REST
 ```

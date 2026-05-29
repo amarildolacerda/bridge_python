@@ -82,7 +82,7 @@ class UDPBridgeSimulator:
         try:
             data = json.loads(message)
 
-            if data.get("discover") or data.get("service") == "mqtt-bridge":
+            if data.get("discover") or data.get("service") == "esp-matter-bridge":
                 print(f"Discovery request from {addr[0]}")
                 self.send_bridge_info(addr)
 

@@ -9,5 +9,8 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=c:\\git\\bridge\\build"
+  ],
+  "DockerRun.Containers": [
+    "7fefe2260007"
   ]
 }

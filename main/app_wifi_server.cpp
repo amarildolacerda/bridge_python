@@ -63,8 +63,7 @@ static void handle_udp_discovery(void)
             cJSON *svc = cJSON_GetObjectItem(root, "service");
             cJSON *disc = cJSON_GetObjectItem(root, "discover");
             if (svc && svc->valuestring &&
-                (strcmp(svc->valuestring, "mqtt-bridge") == 0 ||
-                 strcmp(svc->valuestring, "esp-matter-bridge") == 0) &&
+                (strcmp(svc->valuestring, "esp-matter-bridge") == 0) &&
                 disc && cJSON_IsTrue(disc)) {
                 is_discovery = true;
             }

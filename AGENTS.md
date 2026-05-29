@@ -5,7 +5,7 @@
 Bridge Matter para integrar dispositivos ESP8266 (WiFi) à Alexa via Matter, usando ESP32 como bridge.
 
 ```raw
-ESP8266 (sensor/ator) --WiFi--> ESP32 Bridge (HTTP REST + MQTT) --Matter--> Alexa
+ESP8266 (sensor/ator) --WiFi--> ESP32 Bridge (HTTP REST API) --Matter--> Alexa
 ```
 
 ## Estrutura do Projeto
@@ -21,8 +21,7 @@ ESP8266 (sensor/ator) --WiFi--> ESP32 Bridge (HTTP REST + MQTT) --Matter--> Alex
 │   └── app_priv.h                 # Definições compartilhadas
 ├── clients/
 │   ├── esp8266_on_off/            # Cliente ESP8266: relé on/off (funcional)
-│   ├── esp8266_dh11/              # Cliente ESP8266: sensor DHT11 (em desenvolvimento)
-│   └── esp32_mqtt/                # Cliente ESP32 MQTT
+│   └── esp8266_dh11/              # Cliente ESP8266: sensor DHT11 (em desenvolvimento)
 ├── sdkconfig                      # Config ESP-IDF (não commitar)
 ├── sdkconfig.defaults             # Config base do projeto
 ├── partitions.csv                 # Partições OTA (2 x ~1.9MB)
@@ -104,7 +103,7 @@ clients/esp8266_<tipo>/
 #define DISCOVERY_PORT 5000
 #define DISCOVERY_TIMEOUT 30000
 
-#define MQTT_PORT 1883
+#define BRIDGE_PORT 80
 
 // Pinos específicos por tipo
 #if DEVICE_TYPE == DEVICE_TYPE_ONOFF || DEVICE_TYPE == DEVICE_TYPE_DIMMABLE
@@ -123,12 +122,12 @@ clients/esp8266_<tipo>/
 ### Main.cpp — Componentes obrigatórios:
 
 1. **WiFiManager** — configuração WiFi por portal captive (`tzapu/WiFiManager`)
-2. **UDP Discovery** — encontra o bridge MQTT via broadcast porta 5000
-3. **PubSubClient** — MQTT para comunicação com o bridge
-4. **Web Server** — página HTML local + API REST (`/api/state`, etc.)
-5. **MQTT Callback** — processa comandos `set_onoff`, `set_level`, `reboot`, `set_interval`, `calibrate`
-6. **Device Registration** — registra no tópico `mqtt-bridge/register`
-7. **State/Telemetry/Event publish** — tópicos `mqtt-bridge/{id}/state`, `/telemetry`, `/event`
+2. **UDP Discovery** — encontra o bridge via broadcast porta 5000
+3. **Web Server** — página HTML local + API REST (`/api/state`, etc.)
+4. **HTTP REST Client** — comunicação via `POST /api/device/state`, `POST /api/device/register`, `GET /api/device/commands`
+5. **Device Registration** — registra via `POST /api/device/register`
+6. **State publish** — publica estado via `POST /api/device/state`
+7. **Command polling** — busca comandos via `GET /api/device/commands?id=...`
 8. **Button interrupt** — (se tiver botão) com debounce de 300ms
 
 ### Platformio.ini — Dependências padrão:
@@ -140,9 +139,8 @@ board = d1_mini
 framework = arduino
 monitor_speed = 115200
 lib_deps =
-    bblanchon/ArduinoJson@^6.19.4
+    bblanchon/ArduinoJson@^7.3.1
     tzapu/WiFiManager@^2.0.0
-    knolleary/PubSubClient@^2.8.0
     adafruit/DHT sensor library@^1.4.6   # se for DHT
 ```
 
@@ -198,15 +196,15 @@ idf.py size-components  # Detalhado por componente
 ## Fluxo de Funcionamento
 
 1. ESP32 inicia → WiFi → servidor HTTP → node Matter com Aggregator
-2. ESP8266 conecta WiFi → descobre bridge via UDP → registra via MQTT
-3. ESP8266 publica estado periodicamente em `mqtt-bridge/{id}/state`
+2. ESP8266 conecta WiFi → descobre bridge via UDP → registra via HTTP REST (`POST /api/device/register`)
+3. ESP8266 publica estado periodicamente via `POST /api/device/state`
 4. ESP32 recebe via bridge → atualiza atributos Matter
 5. Alexa envia comando Matter → callback no ESP32 → comando enfileirado
 6. ESP8266 faz polling via `GET /api/device/commands` → executa comando
 
 ## Decisões de Design
 
-- **MQTT** (não REST direto): mais robusto para múltiplos dispositivos, o bridge pode assinar tópicos
+- **HTTP REST** (não MQTT): comunicação direta via HTTP, sem broker externo
 - **UDP Discovery**: ESP8266 descobre o bridge automaticamente sem config endereço
 - **Polling de comandos**: ESP8266 busca comandos a cada 100ms (simples, sem WebSocket)
 - **Device Registry estático**: array fixo com mutex, sem alocação dinâmica para devices (evita fragmentação)

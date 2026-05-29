@@ -134,7 +134,7 @@ static void maintain_bridge_discovery(void)
         DeserializationError error = deserializeJson(doc, buffer);
         if (!error && doc.containsKey("service"))
         {
-            if (strcmp(doc["service"], "mqtt-bridge") == 0 || strcmp(doc["service"], "esp-matter-bridge") == 0)
+                if (strcmp(doc["service"], "esp-matter-bridge") == 0)
             {
                 const char *host = doc["ip_sta"];
                 int port = doc["http_port"] | 0;
@@ -159,7 +159,7 @@ static void maintain_bridge_discovery(void)
     {
         last_active_discovery = now;
         JsonDocument req;
-        req["service"] = "mqtt-bridge";
+        req["service"] = "esp-matter-bridge";
         req["discover"] = true;
         String payload;
         serializeJson(req, payload);
@@ -173,7 +173,7 @@ static void maintain_bridge_discovery(void)
 static bool discover_bridge(void)
 {
     JsonDocument req;
-    req["service"] = "mqtt-bridge";
+    req["service"] = "esp-matter-bridge";
     req["discover"] = true;
     String payload;
     serializeJson(req, payload);
@@ -197,7 +197,7 @@ static bool discover_bridge(void)
             DeserializationError error = deserializeJson(doc, buffer);
             if (!error && doc.containsKey("service"))
             {
-                if (strcmp(doc["service"], "mqtt-bridge") == 0 || strcmp(doc["service"], "esp-matter-bridge") == 0)
+            if (strcmp(doc["service"], "esp-matter-bridge") == 0)
                 {
                     const char *host = doc["ip_sta"];
                     if (host && strlen(host) > 0)
