@@ -107,6 +107,7 @@ static bool register_device()
         doc["id"] = DEVICE_ID;
         doc["type"] = DEVICE_TYPE;
         doc["name"] = DEVICE_NAME;
+        doc["ip"] = WiFi.localIP().toString();
         serializeJson(doc, body);
     }
     Serial.printf("[%s] Registering...\n", TAG);

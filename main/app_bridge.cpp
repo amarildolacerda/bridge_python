@@ -154,7 +154,7 @@ static void bridge_remove_stale_endpoints_work(intptr_t arg)
     esp_err_t err = esp_matter_bridge::get_bridged_endpoint_ids(endpoint_ids);
     if (err == ESP_OK) {
         for (int i = 0; i < max_devices; i++) {
-            if (endpoint_ids[i] == 0) continue;
+            if (endpoint_ids[i] == 0 || endpoint_ids[i] == 0xFFFF) continue;
             esp_matter_bridge::device_t *dev = esp_matter_bridge::resume_device(
                 s_node, endpoint_ids[i], NULL);
             if (dev) {
@@ -162,6 +162,8 @@ static void bridge_remove_stale_endpoints_work(intptr_t arg)
                 ESP_LOGI(TAG, "Removed stale bridge endpoint %d", endpoint_ids[i]);
             }
         }
+    } else {
+        ESP_LOGI(TAG, "No bridged endpoints in NVS (fresh boot)");
     }
     free(endpoint_ids);
 }
@@ -289,7 +291,7 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
     switch (event->Type) {
     case chip::DeviceLayer::DeviceEventType::kInterfaceIpAddressChanged: {
         esp_netif_ip_info_t ip_info;
-        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("STA_DEF");
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
         if (netif && esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
             ESP_LOGI(TAG, "Matter IP: " IPSTR, IP2STR(&ip_info.ip));
         } else {

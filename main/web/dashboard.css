@@ -240,6 +240,34 @@ h1 {
   color: var(--muted);
 }
 
+.code {
+  font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  background: var(--surface-2);
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+
+.cpy {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.cpy:hover {
+  background: var(--primary-strong);
+}
+
 @media (max-width: 900px) {
   .hero,
   .content {

@@ -105,32 +105,15 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "  Acesse: http://%s", ip_str);
         ESP_LOGI(TAG, "═══════════════════════════════════════════════");
 
-        // Initialize Matter stack after WiFi is connected
-        if (xMatterMutex != NULL) {
-            if (xSemaphoreTake(xMatterMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
-                esp_err_t err = bridge_init();
-                xSemaphoreGive(xMatterMutex);
-                if (err == ESP_OK) {
-                    ESP_LOGI(TAG, "Matter bridge initialized successfully");
-                    
-                    // Start HTTP server now that Matter is initialized
-                    err = wifi_server_start();
-                    if (err == ESP_OK) {
-                        ESP_LOGI(TAG, "HTTP server started");
-                    } else {
-                        ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
-                    }
-                    
-                    print_onboarding_codes();
-                } else {
-                    ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
-                }
-            } else {
-                ESP_LOGE(TAG, "Failed to take Matter mutex during bridge init");
-            }
+        // HTTP server + onboarding codes now that WiFi is connected
+        esp_err_t err = wifi_server_start();
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "HTTP server started");
         } else {
-            ESP_LOGE(TAG, "Matter mutex not initialized");
+            ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
         }
+        
+        print_onboarding_codes();
     }
 }
 
@@ -164,20 +147,30 @@ extern "C" void app_main()
 
     device_registry_init();
 
-    // Register event handlers BEFORE starting WiFi connection
+    // Initialize Matter stack BEFORE WiFi — enables BLE commissioning
+    // The Matter stack manages WiFi provisioning via commissioning flow
+    ESP_LOGI(TAG, "Initializing Matter bridge...");
+    err = bridge_init();
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Matter bridge initialized successfully");
+    } else {
+        ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
+    }
+
+    // Register reset button
+    app_reset_button_register();
+
+    // Register event handlers BEFORE starting WiFi
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
 
-    // Start WiFi connection (station mode)
-    ESP_LOGI(TAG, "Starting WiFi connection...");
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    assert(sta_netif);
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    // Matter's InitWiFiStack() already created netif and called esp_wifi_init()
+    // We just need to set mode and start WiFi
+    ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "ESP-Matter Bridge waiting for WiFi connection...");
+    ESP_LOGI(TAG, "ESP-Matter Bridge ready — aguardando WiFi via commissioning...");
     ESP_LOGI(TAG, "Setup PIN: 20202021, Discriminator: 3840");
+    print_onboarding_codes();
 }

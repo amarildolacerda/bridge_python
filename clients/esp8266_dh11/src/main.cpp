@@ -79,6 +79,7 @@ static bool register_device(void)
         doc["id"] = DEVICE_ID;
         doc["type"] = get_device_type_string();
         doc["name"] = DEVICE_NAME;
+        doc["ip"] = WiFi.localIP().toString();
         serializeJson(doc, body);
     }
     Serial.printf("[%s] Registering device: %s\n", TAG, DEVICE_ID);
@@ -161,6 +162,7 @@ static void maintain_bridge_discovery(void)
         JsonDocument req;
         req["service"] = "esp-matter-bridge";
         req["discover"] = true;
+        req["id"] = DEVICE_ID;
         String payload;
         serializeJson(req, payload);
         s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
@@ -175,6 +177,7 @@ static bool discover_bridge(void)
     JsonDocument req;
     req["service"] = "esp-matter-bridge";
     req["discover"] = true;
+    req["id"] = DEVICE_ID;
     String payload;
     serializeJson(req, payload);
 

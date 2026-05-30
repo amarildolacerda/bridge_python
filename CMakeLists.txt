@@ -27,7 +27,7 @@ if(CONFIG_IDF_TARGET_ESP32C2)
     include(relinker)
 endif()
 
-idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H;-Wno-overloaded-virtual" APPEND)
+idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H;-DCHIP_DEVICE_CONFIG_BLE_ADVERTISING_INTERVAL_CHANGE_TIME=120000;-Wno-overloaded-virtual" APPEND)
 
 if (CONFIG_ENABLE_ESP_INSIGHTS_TRACE)
     target_add_binary_data(esp_matter_bridge.elf "insights_auth_key.txt" TEXT)

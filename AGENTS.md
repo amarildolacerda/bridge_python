@@ -1,5 +1,10 @@
 # ESP-Matter Bridge — Diretiva para Sessão IA
 
+## Skills Disponíveis
+- `guia-lora-gateway`: Gateway multi-rádio (LoRa/UDP/RF433/nRF24) — arquitetura, protocolo, fluxo de mensagens. Carregar com `skill` tool quando o assunto for o projeto LoRaGateway de amarildolacerda.
+
+# ESP-Matter Bridge — Diretiva para Sessão IA
+
 ## Arquitetura Geral
 
 Bridge Matter para integrar dispositivos ESP8266 (WiFi) à Alexa via Matter, usando ESP32 como bridge.

@@ -27,6 +27,10 @@
 <div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div></div>
 </div>
 <div class="card">
+<h2>Comissionamento Matter</h2>
+<div id="commissioning-info"><div class="empty">carregando...</div></div>
+</div>
+<div class="card">
 <h2>Dispositivos <span id="dev-count" style="color:#7A8BA3;font-weight:400"></span></h2>
 <div id="devices"><div class="empty">carregando...</div></div>
 </div>
@@ -47,6 +51,16 @@ document.getElementById('metric-ip').textContent=b.ip;
 document.getElementById('metric-uptime').textContent=uptime;
 document.getElementById('metric-heap').textContent=(b.free_heap/1024).toFixed(0)+' KB';
 }catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:#C62828">Erro de conexão</span></div>'}
+
+try{
+let r=await fetch('/api/bridge/commissioning');
+let c=await r.json();
+document.getElementById('commissioning-info').innerHTML=
+'<div class="row"><span class="label">Código manual</span><span class="value code" id="manual-code">'+c.manual_code+'</span><button class="cpy" onclick="navigator.clipboard.writeText(\''+c.manual_code+'\')">copiar</button></div>'+
+'<div class="row"><span class="label">PIN</span><span class="value">'+c.pin+'</span></div>'+
+'<div class="row"><span class="label">Discriminator</span><span class="value">'+c.discriminator+'</span></div>'+
+'<div class="row"><span class="label">QR Payload</span><span class="value code" style="font-size:12px">'+c.qr_code_payload+'</span></div>';
+}catch(e){document.getElementById('commissioning-info').innerHTML='<div class="empty">Dispositivo já comissionado ou erro</div>'}
 
 try{
 let r=await fetch('/api/devices');

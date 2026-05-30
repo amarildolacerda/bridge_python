@@ -12,6 +12,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -38,6 +40,69 @@ static httpd_handle_t s_ws_hd = NULL;
 
 static char s_bridge_ip[16] = "0.0.0.0";
 
+// UDP discovery IP cache: associates device IDs with source IPs
+#define MAX_DISCOVERED_IPS 16
+#define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL) // 5 minutes
+
+typedef struct {
+    char id[MAX_DEVICE_ID_LEN];
+    char ip[16];
+    int64_t last_seen_us;
+} discovered_ip_t;
+
+static discovered_ip_t s_discovered_ips[MAX_DISCOVERED_IPS];
+
+static void cache_discovered_ip(const char *id, const char *ip)
+{
+    if (!id || !*id || !ip) return;
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+        if (strcmp(s_discovered_ips[i].id, id) == 0) {
+            strncpy(s_discovered_ips[i].ip, ip, sizeof(s_discovered_ips[i].ip) - 1);
+            s_discovered_ips[i].ip[sizeof(s_discovered_ips[i].ip) - 1] = '\0';
+            s_discovered_ips[i].last_seen_us = esp_timer_get_time();
+            return;
+        }
+    }
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+        if (s_discovered_ips[i].id[0] == '\0') {
+            strncpy(s_discovered_ips[i].id, id, sizeof(s_discovered_ips[i].id) - 1);
+            s_discovered_ips[i].id[sizeof(s_discovered_ips[i].id) - 1] = '\0';
+            strncpy(s_discovered_ips[i].ip, ip, sizeof(s_discovered_ips[i].ip) - 1);
+            s_discovered_ips[i].ip[sizeof(s_discovered_ips[i].ip) - 1] = '\0';
+            s_discovered_ips[i].last_seen_us = esp_timer_get_time();
+            return;
+        }
+    }
+}
+
+static const char *lookup_discovered_ip(const char *id)
+{
+    if (!id || !*id) return NULL;
+    int64_t now = esp_timer_get_time();
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+        if (s_discovered_ips[i].id[0] != '\0' &&
+            strcmp(s_discovered_ips[i].id, id) == 0) {
+            if (now - s_discovered_ips[i].last_seen_us < DISCOVERED_IP_TIMEOUT_US) {
+                return s_discovered_ips[i].ip;
+            }
+            s_discovered_ips[i].id[0] = '\0';
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+static void cleanup_stale_discovered_ips(void)
+{
+    int64_t now = esp_timer_get_time();
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+        if (s_discovered_ips[i].id[0] != '\0' &&
+            now - s_discovered_ips[i].last_seen_us >= DISCOVERED_IP_TIMEOUT_US) {
+            s_discovered_ips[i].id[0] = '\0';
+        }
+    }
+}
+
 void wifi_server_update_ip(const char *ip)
 {
     strncpy(s_bridge_ip, ip, sizeof(s_bridge_ip) - 1);
@@ -58,6 +123,7 @@ static void handle_udp_discovery(void)
         buf[len] = '\0';
 
         bool is_discovery = false;
+        const char *discovered_id = NULL;
         cJSON *root = cJSON_Parse(buf);
         if (root) {
             cJSON *svc = cJSON_GetObjectItem(root, "service");
@@ -67,7 +133,18 @@ static void handle_udp_discovery(void)
                 disc && cJSON_IsTrue(disc)) {
                 is_discovery = true;
             }
+            cJSON *id_item = cJSON_GetObjectItem(root, "id");
+            if (id_item && id_item->valuestring) {
+                discovered_id = id_item->valuestring;
+            }
             cJSON_Delete(root);
+        }
+
+        if (discovered_id) {
+            char src_ip_str[16];
+            inet_ntop(AF_INET, &src_addr.sin_addr, src_ip_str, sizeof(src_ip_str));
+            cache_discovered_ip(discovered_id, src_ip_str);
+            ESP_LOGI(TAG, "Discovered device %s at IP %s", discovered_id, src_ip_str);
         }
 
         if (is_discovery && strcmp(s_bridge_ip, "0.0.0.0") != 0) {
@@ -135,7 +212,7 @@ static void udp_discovery_task(void *pv)
     ESP_LOGI(TAG, "UDP discovery listening on port %d", DISCOVERY_PORT);
 
     {
-        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("STA_DEF");
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
         if (netif) {
             esp_netif_ip_info_t ip_info;
             if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
@@ -231,10 +308,26 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     const char *name = name_item ? name_item->valuestring : id;
 
     char client_ip[16] = "0.0.0.0";
-    struct sockaddr_in addr;
-    socklen_t addr_len = sizeof(addr);
-    if (getpeername(httpd_req_to_sockfd(req), (struct sockaddr *)&addr, &addr_len) == 0) {
-        inet_ntop(AF_INET, &addr.sin_addr, client_ip, sizeof(client_ip));
+
+    cJSON *ip_item = cJSON_GetObjectItem(root, "ip");
+    if (ip_item && ip_item->valuestring && strlen(ip_item->valuestring) > 0) {
+        strncpy(client_ip, ip_item->valuestring, sizeof(client_ip) - 1);
+        client_ip[sizeof(client_ip) - 1] = '\0';
+    } else {
+        struct sockaddr_in addr;
+        socklen_t addr_len = sizeof(addr);
+        int fd = httpd_req_to_sockfd(req);
+        if (fd >= 0 && getpeername(fd, (struct sockaddr *)&addr, &addr_len) == 0) {
+            inet_ntop(AF_INET, &addr.sin_addr, client_ip, sizeof(client_ip));
+        } else {
+            ESP_LOGW(TAG, "getpeername failed (fd=%d, errno=%d), trying UDP cache", fd, errno);
+            const char *cached = lookup_discovered_ip(id);
+            if (cached) {
+                strncpy(client_ip, cached, sizeof(client_ip) - 1);
+                client_ip[sizeof(client_ip) - 1] = '\0';
+                ESP_LOGI(TAG, "Using UDP discovery cached IP for %s: %s", id, client_ip);
+            }
+        }
     }
 
     device_type_t type = device_type_from_string(type_str);
@@ -565,6 +658,17 @@ static esp_err_t ping_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t reset_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"rebooting...\"}");
+    ESP_LOGW(TAG, "Reset requested via API, rebooting in 500ms...");
+    fflush(stdout);
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+    return ESP_OK;
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
@@ -706,7 +810,7 @@ esp_err_t wifi_server_start(void)
     config.server_port = 80;
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_uri_handlers = 14;
+    config.max_uri_handlers = 16;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {
@@ -793,6 +897,14 @@ esp_err_t wifi_server_start(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &ping_uri);
+
+    httpd_uri_t reset_uri = {
+        .uri = "/api/bridge/reset",
+        .method = HTTP_POST,
+        .handler = reset_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &reset_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",
