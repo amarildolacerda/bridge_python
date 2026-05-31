@@ -107,9 +107,14 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type, const ch
         rmaker_dev = esp_rmaker_lightbulb_device_create(name, priv_id, false);
         break;
 
-    case DEVICE_TYPE_TEMPERATURE_SENSOR:
+    case DEVICE_TYPE_TEMPERATURE_SENSOR: {
         rmaker_dev = esp_rmaker_temp_sensor_device_create(name, priv_id, 0.0f);
+        if (rmaker_dev) {
+            esp_rmaker_param_t *hum = esp_rmaker_param_create("Humidity", NULL, esp_rmaker_float(0.0f), PROP_FLAG_READ);
+            if (hum) esp_rmaker_device_add_param(rmaker_dev, hum);
+        }
         break;
+    }
 
     case DEVICE_TYPE_HUMIDITY_SENSOR: {
         rmaker_dev = esp_rmaker_device_create(name, ESP_RMAKER_DEVICE_OTHER, priv_id);

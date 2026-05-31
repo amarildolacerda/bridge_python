@@ -20,6 +20,9 @@ static unsigned long s_last_state_update = 0;
 static unsigned long s_last_telemetry_update = 0;
 static unsigned long s_last_reconnect_attempt = 0;
 static unsigned long s_last_broadcast_check = 0;
+static unsigned long s_last_bridge_reconnect = 0;
+
+static bool s_bridge_connected = false;
 
 static float s_temperature = 0;
 static float s_humidity = 0;
@@ -56,8 +59,10 @@ static bool http_post(const char *path, const String &body)
 {
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + path);
     s_http.addHeader("Content-Type", "application/json");
+    s_http.setTimeout(5000);
     int code = s_http.POST(body);
     bool ok = (code == 200);
+    s_bridge_connected = ok;
     if (!ok)
     {
         static unsigned long last_warn = 0;
@@ -97,6 +102,8 @@ static bool register_device(void)
 
 static void send_state(bool force_log)
 {
+    if (!s_bridge_discovered || !s_bridge_connected) return;
+
     String body;
     {
         JsonDocument doc;
@@ -135,7 +142,7 @@ static void maintain_bridge_discovery(void)
         DeserializationError error = deserializeJson(doc, buffer);
         if (!error && doc.containsKey("service"))
         {
-                if (strcmp(doc["service"], "esp-matter-bridge") == 0)
+                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0)
             {
                 const char *host = doc["ip_sta"];
                 int port = doc["http_port"] | 0;
@@ -160,7 +167,7 @@ static void maintain_bridge_discovery(void)
     {
         last_active_discovery = now;
         JsonDocument req;
-        req["service"] = "esp-matter-bridge";
+        req["service"] = "esp-rmaker-gateway";
         req["discover"] = true;
         req["id"] = DEVICE_ID;
         String payload;
@@ -175,7 +182,7 @@ static void maintain_bridge_discovery(void)
 static bool discover_bridge(void)
 {
     JsonDocument req;
-    req["service"] = "esp-matter-bridge";
+    req["service"] = "esp-rmaker-gateway";
     req["discover"] = true;
     req["id"] = DEVICE_ID;
     String payload;
@@ -200,7 +207,7 @@ static bool discover_bridge(void)
             DeserializationError error = deserializeJson(doc, buffer);
             if (!error && doc.containsKey("service"))
             {
-            if (strcmp(doc["service"], "esp-matter-bridge") == 0)
+            if (strcmp(doc["service"], "esp-rmaker-gateway") == 0)
                 {
                     const char *host = doc["ip_sta"];
                     if (host && strlen(host) > 0)
@@ -416,6 +423,16 @@ void loop(void)
     maintain_bridge_discovery();
 
     unsigned long now = millis();
+
+    if (!s_bridge_connected && s_bridge_discovered && now - s_last_bridge_reconnect > 30000)
+    {
+        s_last_bridge_reconnect = now;
+        if (register_device())
+        {
+            s_last_state_update = now;
+            send_state(true);
+        }
+    }
 
     if (now - s_last_telemetry_update > TELEMETRY_INTERVAL)
     {

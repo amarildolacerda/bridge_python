@@ -66,6 +66,23 @@ extern "C" void app_main()
 
     ESP_ERROR_CHECK(rmaker_gateway_init());
 
+    int loaded = device_registry_get_loaded_count();
+    if (loaded > 0) {
+        ESP_LOGI(TAG, "Restoring %d devices from NVS...", loaded);
+        int count = 0;
+        bridged_device_t *devices = device_registry_get_all(&count);
+        for (int i = 0; i < count; i++) {
+            if (devices[i].registered && !devices[i].rmaker_device_hdl) {
+                esp_err_t err = rmaker_gateway_device_add(devices[i].id, devices[i].type, devices[i].name);
+                if (err == ESP_OK) {
+                    ESP_LOGI(TAG, "Restored RainMaker device: %s (%s)", devices[i].name, devices[i].id);
+                } else {
+                    ESP_LOGW(TAG, "Failed to restore device %s: %s", devices[i].id, esp_err_to_name(err));
+                }
+            }
+        }
+    }
+
     esp_rmaker_start();
 
     err = app_network_start(POP_TYPE_RANDOM);

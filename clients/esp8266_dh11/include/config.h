@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define DEVICE_ID "esp8266_dht11_sala"
+#define DEVICE_ID "temperatura_sala"
 #define DEVICE_NAME "Temperatura Sala"
 
 #define DEVICE_TYPE_ONOFF 1

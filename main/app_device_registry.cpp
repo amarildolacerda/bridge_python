@@ -5,13 +5,118 @@
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <nvs_flash.h>
 
 static const char *TAG = "device_registry";
 
 static bridged_device_t s_devices[MAX_BRIDGED_DEVICES];
 static int s_device_count = 0;
+static int s_loaded_count = 0;
 
 static SemaphoreHandle_t s_registry_mutex = NULL;
+
+#define NVS_KEY_DEVICES "devices"
+
+typedef struct __attribute__((packed)) {
+    char id[MAX_DEVICE_ID_LEN];
+    char name[MAX_DEVICE_NAME_LEN];
+    char ip[16];
+    int32_t type;
+    char state_json[MAX_DEVICE_STATE_LEN];
+} persisted_device_t;
+
+static void device_registry_save(void)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_DEVICE_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "NVS open for save failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    uint8_t count = 0;
+    persisted_device_t pdevs[MAX_BRIDGED_DEVICES];
+    memset(pdevs, 0, sizeof(pdevs));
+
+    for (int i = 0; i < MAX_BRIDGED_DEVICES; i++) {
+        if (s_devices[i].registered) {
+            strncpy(pdevs[count].id, s_devices[i].id, MAX_DEVICE_ID_LEN - 1);
+            strncpy(pdevs[count].name, s_devices[i].name, MAX_DEVICE_NAME_LEN - 1);
+            strncpy(pdevs[count].ip, s_devices[i].ip, sizeof(pdevs[count].ip) - 1);
+            pdevs[count].type = (int32_t)s_devices[i].type;
+            strncpy(pdevs[count].state_json, s_devices[i].state_json, MAX_DEVICE_STATE_LEN - 1);
+            count++;
+        }
+    }
+
+    size_t blob_size = sizeof(uint8_t) + count * sizeof(persisted_device_t);
+    err = nvs_set_blob(nvs, NVS_KEY_DEVICES, &count, blob_size);
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "NVS save failed: %s", esp_err_to_name(err));
+    }
+    nvs_close(nvs);
+}
+
+static void device_registry_load(void)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_DEVICE_NAMESPACE, NVS_READONLY, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "NVS open for load failed (first boot?): %s", esp_err_to_name(err));
+        return;
+    }
+
+    uint8_t count = 0;
+    size_t required_size = sizeof(count);
+    err = nvs_get_blob(nvs, NVS_KEY_DEVICES, &count, &required_size);
+    if (err != ESP_OK) {
+        nvs_close(nvs);
+        return;
+    }
+
+    size_t blob_size = sizeof(uint8_t) + count * sizeof(persisted_device_t);
+    uint8_t *blob = (uint8_t *)malloc(blob_size);
+    if (!blob) {
+        nvs_close(nvs);
+        return;
+    }
+
+    size_t actual_size = blob_size;
+    err = nvs_get_blob(nvs, NVS_KEY_DEVICES, blob, &actual_size);
+    if (err != ESP_OK || actual_size < sizeof(uint8_t)) {
+        free(blob);
+        nvs_close(nvs);
+        return;
+    }
+
+    uint8_t actual_count = blob[0];
+    if (actual_count > MAX_BRIDGED_DEVICES) actual_count = MAX_BRIDGED_DEVICES;
+
+    for (int i = 0; i < actual_count; i++) {
+        persisted_device_t *pdev = (persisted_device_t *)(blob + sizeof(uint8_t) + i * sizeof(persisted_device_t));
+        bridged_device_t *dev = &s_devices[i];
+        strncpy(dev->id, pdev->id, MAX_DEVICE_ID_LEN - 1);
+        strncpy(dev->name, pdev->name, MAX_DEVICE_NAME_LEN - 1);
+        strncpy(dev->ip, pdev->ip, sizeof(dev->ip) - 1);
+        dev->type = (device_type_t)pdev->type;
+        dev->registered = true;
+        dev->rmaker_device_hdl = NULL;
+        dev->pending_command_count = 0;
+        dev->online = false;
+        dev->last_seen_us = 0;
+        strncpy(dev->state_json, pdev->state_json, MAX_DEVICE_STATE_LEN - 1);
+    }
+
+    s_device_count = actual_count;
+    s_loaded_count = actual_count;
+    free(blob);
+    nvs_close(nvs);
+
+    ESP_LOGI(TAG, "Loaded %d devices from NVS", s_loaded_count);
+}
 
 static int find_device_slot(void)
 {
@@ -65,12 +170,15 @@ esp_err_t device_registry_init(void)
 {
     memset(s_devices, 0, sizeof(s_devices));
     s_device_count = 0;
+    s_loaded_count = 0;
     s_registry_mutex = xSemaphoreCreateMutex();
     if (!s_registry_mutex) {
         ESP_LOGE(TAG, "Failed to create mutex");
         return ESP_FAIL;
     }
-    ESP_LOGI(TAG, "Device registry initialized, max %d devices", MAX_BRIDGED_DEVICES);
+    device_registry_load();
+    ESP_LOGI(TAG, "Device registry initialized, max %d devices (%d restored from NVS)",
+             MAX_BRIDGED_DEVICES, s_loaded_count);
     return ESP_OK;
 }
 
@@ -92,6 +200,7 @@ int device_registry_register(const char *id, device_type_t type, const char *nam
         dev->last_seen_us = esp_timer_get_time();
         ESP_LOGW(TAG, "Device %s already registered, refreshed metadata", id);
         xSemaphoreGive(s_registry_mutex);
+        device_registry_save();
         return existing;
     }
 
@@ -120,6 +229,7 @@ int device_registry_register(const char *id, device_type_t type, const char *nam
 
     ESP_LOGI(TAG, "Registered device: %s (type: %s, slot: %d)", id, device_type_to_string(type), slot);
     xSemaphoreGive(s_registry_mutex);
+    device_registry_save();
     return slot;
 }
 
@@ -297,6 +407,7 @@ esp_err_t device_registry_remove_device(const char *id)
     s_device_count--;
     ESP_LOGI(TAG, "Removed device: %s", id);
     xSemaphoreGive(s_registry_mutex);
+    device_registry_save();
     return ESP_OK;
 }
 
@@ -391,4 +502,9 @@ void *device_registry_get_rmaker_handle(const char *id)
     }
     xSemaphoreGive(s_registry_mutex);
     return hdl;
+}
+
+int device_registry_get_loaded_count(void)
+{
+    return s_loaded_count;
 }

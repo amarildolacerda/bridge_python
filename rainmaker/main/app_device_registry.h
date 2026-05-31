@@ -12,6 +12,8 @@
 #define MAX_COMMAND_DATA_LEN 32
 #define DEVICE_ONLINE_TIMEOUT_US (120 * 1000000LL)
 
+#define NVS_DEVICE_NAMESPACE "dev_reg"
+
 typedef enum {
     DEVICE_TYPE_ON_OFF = 0,
     DEVICE_TYPE_DIMMABLE,
@@ -59,3 +61,4 @@ esp_err_t device_registry_remove_device(const char *id);
 void device_registry_mark_seen(const char *id);
 void device_registry_set_rmaker_handle(const char *id, void *rmaker_dev);
 void *device_registry_get_rmaker_handle(const char *id);
+int device_registry_get_loaded_count(void);

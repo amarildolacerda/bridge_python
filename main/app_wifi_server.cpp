@@ -122,7 +122,7 @@ static void handle_udp_discovery(void)
         buf[len] = '\0';
 
         bool is_discovery = false;
-        const char *discovered_id = NULL;
+        char discovered_id[MAX_DEVICE_ID_LEN] = {0};
         cJSON *root = cJSON_Parse(buf);
         if (root) {
             cJSON *svc = cJSON_GetObjectItem(root, "service");
@@ -134,12 +134,12 @@ static void handle_udp_discovery(void)
             }
             cJSON *id_item = cJSON_GetObjectItem(root, "id");
             if (id_item && id_item->valuestring) {
-                discovered_id = id_item->valuestring;
+                strncpy(discovered_id, id_item->valuestring, sizeof(discovered_id) - 1);
             }
             cJSON_Delete(root);
         }
 
-        if (discovered_id) {
+        if (discovered_id[0]) {
             char src_ip_str[16];
             inet_ntop(AF_INET, &src_addr.sin_addr, src_ip_str, sizeof(src_ip_str));
             cache_discovered_ip(discovered_id, src_ip_str);
@@ -800,6 +800,8 @@ esp_err_t wifi_server_start(void)
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.max_uri_handlers = 20;
+    config.max_open_sockets = 7;
+    config.keep_alive_enable = true;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {

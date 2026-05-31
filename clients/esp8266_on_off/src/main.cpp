@@ -230,7 +230,7 @@ static void maintain_bridge_discovery(void)
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, buffer);
         if (!error && doc.containsKey("service")) {
-                if (strcmp(doc["service"], "esp-matter-bridge") == 0) {
+                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0) {
                 const char *host = doc["ip_sta"];
                 int port = doc["http_port"] | 0;
                 if (!port) port = BRIDGE_PORT;
@@ -250,7 +250,7 @@ static void maintain_bridge_discovery(void)
     if (!s_bridge_discovered && now - last_active_discovery > 30000) {
         last_active_discovery = now;
         JsonDocument req;
-        req["service"] = "esp-matter-bridge";
+        req["service"] = "esp-rmaker-gateway";
         req["discover"] = true;
         req["id"] = DEVICE_ID;
         String payload;
@@ -265,7 +265,7 @@ static void maintain_bridge_discovery(void)
 static bool discover_bridge(void)
 {
     JsonDocument req;
-    req["service"] = "esp-matter-bridge";
+    req["service"] = "esp-rmaker-gateway";
     req["discover"] = true;
     req["id"] = DEVICE_ID;
     String payload;
@@ -287,7 +287,7 @@ static bool discover_bridge(void)
             JsonDocument doc;
             DeserializationError error = deserializeJson(doc, buffer);
             if (!error && doc.containsKey("service")) {
-                if (strcmp(doc["service"], "esp-matter-bridge") == 0) {
+                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0) {
                     const char *host = doc["ip_sta"];
                     if (host && strlen(host) > 0) {
                         strcpy(s_bridge_host, host);
