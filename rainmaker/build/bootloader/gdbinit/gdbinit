@@ -1,0 +1,2 @@
+source /project/rainmaker/build/bootloader/gdbinit/symbols
+source /project/rainmaker/build/bootloader/gdbinit/connect

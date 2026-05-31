@@ -1,5 +1,6 @@
 #include "app_bridge.h"
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <esp_matter.h>
 #include <esp_matter_bridge.h>
 #include <esp_matter_endpoint.h>
@@ -35,16 +36,17 @@ struct bridge_remove_work_t {
 
 static void set_reachable_work(intptr_t arg)
 {
-    uint16_t ep_id = (uint16_t)arg;
-    esp_matter_attr_val_t reachable = esp_matter_bool(true);
+    uint16_t ep_id = (uint16_t)(arg & 0xFFFF);
+    bool reachable = (arg >> 16) & 1;
+    esp_matter_attr_val_t val = esp_matter_bool(reachable);
     attribute::update(ep_id, BridgedDeviceBasicInformation::Id,
-                      BridgedDeviceBasicInformation::Attributes::Reachable::Id, &reachable);
+                      BridgedDeviceBasicInformation::Attributes::Reachable::Id, &val);
 }
 
-static esp_err_t set_reachable(endpoint_t *ep)
+static esp_err_t set_reachable(endpoint_t *ep, bool reachable)
 {
-    chip::DeviceLayer::PlatformMgr().ScheduleWork(set_reachable_work,
-                                                  (intptr_t)endpoint::get_id(ep));
+    intptr_t arg = endpoint::get_id(ep) | ((reachable ? 1 : 0) << 16);
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(set_reachable_work, arg);
     return ESP_OK;
 }
 
@@ -71,9 +73,11 @@ static void bridge_add_device_work(intptr_t arg)
         return;
     }
 
+    endpoint::enable(dev->endpoint);
+
     uint16_t ep_id = endpoint::get_id(dev->endpoint);
     device_registry_set_endpoint_id(work->id, ep_id);
-    set_reachable(dev->endpoint);
+    set_reachable(dev->endpoint, true);
     ESP_LOGI(TAG, "Bridged device %s created on endpoint %d (Matter type 0x%04lx)",
              work->id, ep_id, matter_type_id);
     free(work);
@@ -103,6 +107,12 @@ static void bridge_update_matter_state_work(intptr_t arg)
     }
 
     uint16_t ep_id = dev->matter_endpoint_id;
+
+    {
+        esp_matter_attr_val_t reachable = esp_matter_bool(true);
+        attribute::update(ep_id, BridgedDeviceBasicInformation::Id,
+                          BridgedDeviceBasicInformation::Attributes::Reachable::Id, &reachable);
+    }
 
     if (strcmp(work->key, "on") == 0) {
         bool on = (strcmp(work->value, "true") == 0 || strcmp(work->value, "1") == 0);
@@ -316,6 +326,17 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
     }
 }
 
+static void check_online_timeout_timer(void *arg)
+{
+    uint16_t stale_eps[MAX_BRIDGED_DEVICES];
+    int count = 0;
+    device_registry_get_stale_devices(stale_eps, &count, MAX_BRIDGED_DEVICES);
+    for (int i = 0; i < count; i++) {
+        intptr_t work_arg = stale_eps[i] | (0 << 16);
+        chip::DeviceLayer::PlatformMgr().ScheduleWork(set_reachable_work, work_arg);
+    }
+}
+
 esp_err_t bridge_init(void)
 {
     node::config_t node_config;
@@ -350,6 +371,16 @@ esp_err_t bridge_init(void)
 
     // Remove stale bridge endpoints restored from NVS on the Matter thread
     chip::DeviceLayer::PlatformMgr().ScheduleWork(bridge_remove_stale_endpoints_work, (intptr_t)NULL);
+
+    // Periodic timer to mark unreachable devices after timeout
+    const esp_timer_create_args_t timer_args = {
+        .callback = check_online_timeout_timer,
+        .name = "online_check"
+    };
+    esp_timer_handle_t timer;
+    if (esp_timer_create(&timer_args, &timer) == ESP_OK) {
+        esp_timer_start_periodic(timer, 30 * 1000000LL); // check every 30s
+    }
 
     ESP_LOGI(TAG, "Bridge initialized successfully");
     return ESP_OK;

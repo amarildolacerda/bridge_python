@@ -99,16 +99,32 @@ static bool register_device(void)
     return ok;
 }
 
-static void send_state(bool force_log)
+static void send_state(bool force)
 {
     if (!s_bridge_discovered || !s_bridge_connected) return;
+
+    const char *type = get_device_type_string();
+
+    static bool s_last_onoff = false;
+    static int s_last_level = -1;
+    static float s_last_temp = -999;
+    static float s_last_hum = -999;
+
+    bool changed = false;
+    if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0) {
+        changed = (s_onoff_state != s_last_onoff);
+    } else if (strcmp(type, "dimmable") == 0) {
+        changed = (s_onoff_state != s_last_onoff || s_dimmer_level != s_last_level);
+    } else if (strcmp(type, "temperature") == 0) {
+        changed = (abs(s_temperature - s_last_temp) > 0.1 || abs(s_humidity - s_last_hum) > 0.1);
+    }
+
+    if (!changed && !force) return;
 
     String body;
     {
         JsonDocument doc;
         doc["id"] = DEVICE_ID;
-
-        const char *type = get_device_type_string();
 
         if (strcmp(type, "onoff") == 0) {
             doc["on"] = s_onoff_state;
@@ -128,21 +144,15 @@ static void send_state(bool force_log)
     }
 
     if (http_post("/api/device/state", body)) {
-        static bool last_logged_onoff = false;
-        static float last_logged_temp = -999;
-        bool changed = false;
-        const char *type = get_device_type_string();
-
-        if (strcmp(type, "onoff") == 0 || strcmp(type, "dimmable") == 0 ||
-            strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0) {
-            changed = (s_onoff_state != last_logged_onoff);
-            last_logged_onoff = s_onoff_state;
+        if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0) {
+            s_last_onoff = s_onoff_state;
+        } else if (strcmp(type, "dimmable") == 0) {
+            s_last_onoff = s_onoff_state;
+            s_last_level = s_dimmer_level;
         } else if (strcmp(type, "temperature") == 0) {
-            changed = (abs(s_temperature - last_logged_temp) > 0.1);
-            last_logged_temp = s_temperature;
+            s_last_temp = s_temperature;
+            s_last_hum = s_humidity;
         }
-
-        if (!force_log && !changed) return;
 
         if (strcmp(type, "onoff") == 0)
             Serial.printf("[%s] %s\n", TAG, s_onoff_state ? "ON" : "OFF");
@@ -557,10 +567,10 @@ void loop(void)
         Serial.printf("[%s] RSSI=%d dBm  up=%lus\n", TAG, WiFi.RSSI(), (millis() - s_start_time) / 1000);
     }
 
-    if (now - s_last_state_update > STATE_UPDATE_INTERVAL) {
+    if (now - s_last_state_update > HEARTBEAT_INTERVAL) {
         s_last_state_update = now;
         read_sensors();
-        send_state();
+        send_state(true);
     }
 
 #ifdef LED_PIN

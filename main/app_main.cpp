@@ -87,6 +87,7 @@ static void print_onboarding_codes(void)
 static void open_commissioning_window_work(intptr_t)
 {
     ESP_LOGI(TAG, "Reabrindo janela de comissionamento por 60s");
+    chip::DeviceLayer::ConnectivityMgr().SetBLEAdvertisingEnabled(true);
     chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(
         chip::System::Clock::Seconds32(60));
     print_onboarding_codes();
@@ -107,14 +108,29 @@ static void disable_ble_commissioning(intptr_t)
 
 static void enable_ble_commissioning(intptr_t)
 {
-    if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
-        ESP_LOGI(TAG, "WiFi conectado — habilitando BLE para commissioning");
-        chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(
-            chip::System::Clock::Seconds32(300));
-        print_onboarding_codes();
+    bool commissioned = chip::Server::GetInstance().GetFabricTable().FabricCount() > 0;
+    ESP_LOGI(TAG, "Habilitando BLE para commissioning (já comissionado: %s)", commissioned ? "sim" : "não");
+
+    chip::DeviceLayer::ConnectivityMgr().SetBLEAdvertisingEnabled(true);
+
+    CHIP_ERROR err = chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(
+        chip::System::Clock::Seconds32(300));
+    if (err != CHIP_NO_ERROR) {
+        ESP_LOGE(TAG, "Falha ao abrir janela de comissionamento: %s", chip::ErrorStr(err));
     } else {
-        ESP_LOGI(TAG, "Bridge já comissionado — BLE desnecessário");
+        print_onboarding_codes();
     }
+}
+
+static void delayed_commissioning(void *)
+{
+    ESP_LOGI(TAG, "Aguardando 30s para clients se registrarem antes de abrir commissioning...");
+    vTaskDelay(pdMS_TO_TICKS(30000));
+    CHIP_ERROR err = chip::DeviceLayer::PlatformMgr().ScheduleWork(enable_ble_commissioning, 0);
+    if (err != CHIP_NO_ERROR) {
+        ESP_LOGE(TAG, "Falha ao agendar enable_ble_commissioning: %s", chip::ErrorStr(err));
+    }
+    vTaskDelete(NULL);
 }
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
@@ -150,7 +166,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
             xSemaphoreGive(s_wifi_got_ip);
         }
 
-        chip::DeviceLayer::PlatformMgr().ScheduleWork(enable_ble_commissioning, 0);
+        xTaskCreatePinnedToCore(delayed_commissioning, "delayed_commissioning", 4096, NULL, 5, NULL, tskNO_AFFINITY);
     }
 }
 
@@ -178,18 +194,30 @@ extern "C" void app_main()
 
     esp_netif_init();
     esp_event_loop_create_default();
+    esp_netif_create_default_wifi_sta();
 
     device_registry_init();
 
     ESP_LOGI(TAG, "Initializing Matter bridge...");
     err = bridge_init();
+    if (err == ESP_ERR_NVS_INVALID_LENGTH) {
+        ESP_LOGW(TAG, "Bridge NVS data corrupted, erasing and retrying...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ESP_ERROR_CHECK(nvs_flash_init());
+        err = bridge_init();
+    }
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Matter bridge initialized successfully");
     } else {
         ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
     }
 
-    chip::DeviceLayer::PlatformMgr().ScheduleWork(disable_ble_commissioning, 0);
+    {
+        CHIP_ERROR err = chip::DeviceLayer::PlatformMgr().ScheduleWork(disable_ble_commissioning, 0);
+        if (err != CHIP_NO_ERROR) {
+            ESP_LOGE(TAG, "Falha ao agendar disable_ble_commissioning: %s", chip::ErrorStr(err));
+        }
+    }
 
     app_reset_button_register();
 
@@ -198,17 +226,26 @@ extern "C" void app_main()
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
 
+    wifi_init_config_t wifi_cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&wifi_cfg));
+
     ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    wifi_config_t wifi_conf = {};
+    esp_err_t ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_conf);
+    if (ret != ESP_OK || strlen((const char *)wifi_conf.sta.ssid) == 0) {
+        ESP_LOGW(TAG, "No WiFi credentials found, using test AP: kcasa");
+        strcpy((char *)wifi_conf.sta.ssid, "kcasa");
+        strcpy((char *)wifi_conf.sta.password, "3938373635");
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_conf));
+    }
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Aguardando conexão WiFi (15s timeout)...");
-    if (xSemaphoreTake(s_wifi_got_ip, pdMS_TO_TICKS(15000)) == pdTRUE) {
-        ESP_LOGI(TAG, "WiFi conectado antes de habilitar BLE commissioning");
-    } else {
-        ESP_LOGW(TAG, "WiFi não conectou em 15s — habilitando BLE commissioning diretamente");
-        chip::DeviceLayer::PlatformMgr().ScheduleWork(enable_ble_commissioning, 0);
-    }
+    ESP_LOGI(TAG, "Aguardando conexão WiFi...");
+    xSemaphoreTake(s_wifi_got_ip, portMAX_DELAY);
+    ESP_LOGI(TAG, "WiFi conectado");
 
     ESP_LOGI(TAG, "ESP-Matter Bridge ready — Setup PIN: 20202021, Discriminator: 3840");
 }

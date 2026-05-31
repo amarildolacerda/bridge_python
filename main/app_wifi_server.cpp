@@ -681,6 +681,17 @@ static esp_err_t reset_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t factory_reset_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Factory reset...\"}");
+    ESP_LOGW(TAG, "Factory reset requested via API, clearing NVS...");
+    fflush(stdout);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    esp_matter::factory_reset();
+    return ESP_OK;
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
@@ -925,6 +936,14 @@ esp_err_t wifi_server_start(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &commission_uri);
+
+    httpd_uri_t factory_reset_uri = {
+        .uri = "/api/bridge/factory-reset",
+        .method = HTTP_POST,
+        .handler = factory_reset_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &factory_reset_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",

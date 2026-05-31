@@ -2,7 +2,7 @@
   "idf.flashType": "UART",
   "DockerRun.DisableDockerrc": true,
   "idf.currentSetup": "C:\\Users\\amari\\esp\\v5.4.1\\esp-idf",
-  "idf.portWin": "COM5",
+  "idf.portWin": "COM4",
   "idf.customExtraVars": {},
   "clangd.path": "C:\\Users\\amari\\.espressif\\tools\\esp-clang\\esp-18.1.2_20240912\\esp-clang\\bin\\clangd.exe",
   "clangd.arguments": [
@@ -12,5 +12,8 @@
   ],
   "DockerRun.Containers": [
     "7fefe2260007"
+  ],
+  "idf.openOcdConfigs": [
+    "board/esp32c3-builtin.cfg"
   ]
 }

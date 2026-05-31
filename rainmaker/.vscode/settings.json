@@ -1,0 +1,6 @@
+{
+    "idf.currentSetup": "C:\\Users\\amari\\esp\\v5.4.1\\esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32c3-ftdi.cfg"
+    ]
+}

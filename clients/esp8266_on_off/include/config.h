@@ -12,7 +12,8 @@
 
 #define DEVICE_TYPE DEVICE_TYPE_ONOFF
 
-#define STATE_UPDATE_INTERVAL 5000
+#define STATE_UPDATE_INTERVAL 5000  // unused (kept for reference)
+#define HEARTBEAT_INTERVAL 60000    // periodic keep-alive (bridge timeout = 120s)
 #define TELEMETRY_INTERVAL 30000
 #define COMMAND_POLL_INTERVAL 100
 

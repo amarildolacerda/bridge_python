@@ -1,0 +1,2 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/opt/espressif/tools/python_env/idf5.5_py3.12_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=1 /project/rainmaker
+ESP RainMaker Project commit: v1.13.0-3-gd08b878

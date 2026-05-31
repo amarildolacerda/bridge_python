@@ -10,6 +10,7 @@
 #define MAX_BRIDGED_DEVICES CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT
 #define MAX_PENDING_COMMANDS 4
 #define MAX_COMMAND_DATA_LEN 32
+#define DEVICE_ONLINE_TIMEOUT_US (120 * 1000000LL) // 2 min sem state → offline
 
 typedef enum {
     DEVICE_TYPE_ON_OFF = 0,
@@ -39,6 +40,7 @@ typedef struct {
     pending_command_t pending_commands[MAX_PENDING_COMMANDS];
     int pending_command_count;
     bool online;
+    int64_t last_seen_us;
     char state_json[MAX_DEVICE_STATE_LEN];
 } bridged_device_t;
 
@@ -57,3 +59,5 @@ esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster,
 int device_registry_get_commands(uint16_t endpoint_id, pending_command_t *commands, int max_commands);
 esp_err_t device_registry_remove_device(const char *id);
 void device_registry_set_endpoint_id(const char *id, uint16_t endpoint_id);
+void device_registry_get_stale_devices(uint16_t *ep_ids, int *count, int max);
+void device_registry_mark_seen(const char *id);

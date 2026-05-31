@@ -29,8 +29,9 @@
  <div class="card">
  <h2>Comissionamento Matter</h2>
  <div id="commissioning-info"><div class="empty">carregando...</div></div>
- <button class="btn" onclick="reopenCommissioning()" id="btn-commission" style="margin-top:12px;width:100%">Reabrir Comissionamento</button>
- </div>
+  <button class="btn" onclick="reopenCommissioning()" id="btn-commission" style="margin-top:12px;width:100%">Reabrir Comissionamento</button>
+  <button class="btn btn-danger" onclick="factoryReset()" id="btn-factory" style="margin-top:8px;width:100%">Factory Reset (limpar dados)</button>
+  </div>
 <div class="card">
 <h2>Dispositivos <span id="dev-count" style="color:#7A8BA3;font-weight:400"></span></h2>
 <div id="devices"><div class="empty">carregando...</div></div>
@@ -99,6 +100,16 @@ async function reopenCommissioning(){
    setTimeout(()=>{load();btn.disabled=false;btn.textContent='Reabrir Comissionamento';},2000);
   }else{btn.textContent='Erro';setTimeout(()=>{btn.disabled=false;btn.textContent='Reabrir Comissionamento';},3000);}
  }catch(e){btn.textContent='Erro';setTimeout(()=>{btn.disabled=false;btn.textContent='Reabrir Comissionamento';},3000);}
+}
+async function factoryReset(){
+ if(!confirm('Tem certeza? Isso vai apagar todos os dados de comissionamento e reiniciar o bridge.'))return;
+ let btn=document.getElementById('btn-factory');
+ btn.disabled=true;btn.textContent='Resetando...';
+ try{
+  let r=await fetch('/api/bridge/factory-reset',{method:'POST'});
+  let j=await r.json();
+  btn.textContent='OK, reiniciando...';
+ }catch(e){btn.textContent='Erro';setTimeout(()=>{btn.disabled=false;btn.textContent='Factory Reset';},3000);}
 }
 load();setInterval(load,5000);
 </script>

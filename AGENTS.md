@@ -224,7 +224,7 @@ idf.py size-components  # Detalhado por componente
 
 ## Regras Gerais para Sessão IA
 
-1. SEMPRE ler o arquivo relevante com Read antes de editar
+1. checar se precisa recarregar arquivo com Read antes de editar
 2. SEMPRE verificar AGENTS.md para contexto antes de começar
 3. NUNCA adicionar arrays grandes em BSS estático
 4. SEMPRE adicionar defines no `c_cpp_properties.json` para evitar falso cinza no IntelliSense
@@ -238,7 +238,7 @@ idf.py size-components  # Detalhado por componente
 12. mostrar o tempo que esta ativo no dashboard para avaliação visual sobre reset não previstos
 13. preferir usar classes de controles em arquivos dedicados, evitar miturar tudo no mesmo arquivo
 14. sempre que possivel o dispositivo deve ter uma dashboard proprio
-15. sempre perguntar se deseja executar build, e se for executar sempre usar cached
+15. evitar executar build automatico, se precisar considerar que é demorado, e se for executar sempre usar cached
 16. a comunicação com o bridge não pode ser bloqueante
 17. quando for criar ou ajustar dashboard web, reutilizar a paleta leve inspirada no Dashforge: fundo `#f4f7fc`/`#f8fbff`, surface `#ffffff`, surface-2 `#f9fbff`, texto `#24324a`, muted `#7a8ba3`, primary `#3498db`, primary-strong `#2d7dff`, border `#e6edf7`, success `#2e7d32`, danger `#c62828`; manter o CSS em arquivo separado e evitar incluir o template completo
 ```sh
