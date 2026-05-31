@@ -33,16 +33,6 @@ static int find_device_by_id(const char *id)
     return -1;
 }
 
-static int find_device_by_endpoint(uint16_t endpoint_id)
-{
-    for (int i = 0; i < MAX_BRIDGED_DEVICES; i++) {
-        if (s_devices[i].registered && s_devices[i].matter_endpoint_id == endpoint_id) {
-            return i;
-        }
-    }
-    return -1;
-}
-
 device_type_t device_type_from_string(const char *type_str)
 {
     if (strcmp(type_str, "onoff") == 0) return DEVICE_TYPE_ON_OFF;
@@ -68,21 +58,6 @@ const char *device_type_to_string(device_type_t type)
     case DEVICE_TYPE_LIGHT_SENSOR: return "light_sensor";
     case DEVICE_TYPE_TANQUE: return "tanque";
     default: return "unknown";
-    }
-}
-
-uint32_t device_type_to_matter_id(device_type_t type)
-{
-    switch (type) {
-    case DEVICE_TYPE_ON_OFF: return 0x0100;
-    case DEVICE_TYPE_DIMMABLE: return 0x0101;
-    case DEVICE_TYPE_TEMPERATURE_SENSOR: return 0x0302;
-    case DEVICE_TYPE_HUMIDITY_SENSOR: return 0x0307;
-    case DEVICE_TYPE_CONTACT_SENSOR: return 0x0015;
-    case DEVICE_TYPE_OCCUPANCY_SENSOR: return 0x0107;
-    case DEVICE_TYPE_LIGHT_SENSOR: return 0x0106;
-    case DEVICE_TYPE_TANQUE: return 0;  // sem Matter endpoint, apenas dados
-    default: return 0;
     }
 }
 
@@ -136,7 +111,7 @@ int device_registry_register(const char *id, device_type_t type, const char *nam
     dev->ip[sizeof(dev->ip) - 1] = '\0';
     dev->type = type;
     dev->registered = true;
-    dev->matter_endpoint_id = 0;
+    dev->rmaker_device_hdl = NULL;
     dev->pending_command_count = 0;
     dev->online = true;
     dev->last_seen_us = esp_timer_get_time();
@@ -153,19 +128,6 @@ bridged_device_t *device_registry_get_by_id(const char *id)
     if (!s_registry_mutex) return NULL;
     xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
     int idx = find_device_by_id(id);
-    if (idx < 0) {
-        xSemaphoreGive(s_registry_mutex);
-        return NULL;
-    }
-    xSemaphoreGive(s_registry_mutex);
-    return &s_devices[idx];
-}
-
-bridged_device_t *device_registry_get_by_endpoint(uint16_t endpoint_id)
-{
-    if (!s_registry_mutex) return NULL;
-    xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
-    int idx = find_device_by_endpoint(endpoint_id);
     if (idx < 0) {
         xSemaphoreGive(s_registry_mutex);
         return NULL;
@@ -269,11 +231,11 @@ esp_err_t device_registry_update_state(const char *id, const char *key, const ch
     return ESP_OK;
 }
 
-esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster, const char *command, const char *data)
+esp_err_t device_registry_add_command(const char *id, const char *cluster, const char *command, const char *data)
 {
     if (!s_registry_mutex) return ESP_FAIL;
     xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
-    int idx = find_device_by_endpoint(endpoint_id);
+    int idx = find_device_by_id(id);
     if (idx < 0) {
         xSemaphoreGive(s_registry_mutex);
         return ESP_ERR_NOT_FOUND;
@@ -300,11 +262,11 @@ esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster,
     return ESP_OK;
 }
 
-int device_registry_get_commands(uint16_t endpoint_id, pending_command_t *commands, int max_commands)
+int device_registry_get_commands(const char *id, pending_command_t *commands, int max_commands)
 {
     if (!s_registry_mutex) return 0;
     xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
-    int idx = find_device_by_endpoint(endpoint_id);
+    int idx = find_device_by_id(id);
     if (idx < 0) {
         xSemaphoreGive(s_registry_mutex);
         return 0;
@@ -395,18 +357,6 @@ const char *device_registry_get_state_json(const char *id)
     return json_buf;
 }
 
-void device_registry_set_endpoint_id(const char *id, uint16_t endpoint_id)
-{
-    if (!s_registry_mutex) return;
-    xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
-    int idx = find_device_by_id(id);
-    if (idx >= 0) {
-        s_devices[idx].matter_endpoint_id = endpoint_id;
-        ESP_LOGI(TAG, "Device %s mapped to Matter endpoint %d", id, endpoint_id);
-    }
-    xSemaphoreGive(s_registry_mutex);
-}
-
 void device_registry_mark_seen(const char *id)
 {
     if (!s_registry_mutex) return;
@@ -419,19 +369,26 @@ void device_registry_mark_seen(const char *id)
     xSemaphoreGive(s_registry_mutex);
 }
 
-void device_registry_get_stale_devices(uint16_t *ep_ids, int *count, int max)
+void device_registry_set_rmaker_handle(const char *id, void *rmaker_dev)
 {
     if (!s_registry_mutex) return;
     xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
-    int64_t now = esp_timer_get_time();
-    int found = 0;
-    for (int i = 0; i < MAX_BRIDGED_DEVICES && found < max; i++) {
-        if (s_devices[i].registered && s_devices[i].matter_endpoint_id > 0 &&
-            s_devices[i].online && (now - s_devices[i].last_seen_us > DEVICE_ONLINE_TIMEOUT_US)) {
-            ep_ids[found++] = s_devices[i].matter_endpoint_id;
-            s_devices[i].online = false;
-        }
+    int idx = find_device_by_id(id);
+    if (idx >= 0) {
+        s_devices[idx].rmaker_device_hdl = rmaker_dev;
     }
-    *count = found;
     xSemaphoreGive(s_registry_mutex);
+}
+
+void *device_registry_get_rmaker_handle(const char *id)
+{
+    if (!s_registry_mutex) return NULL;
+    xSemaphoreTake(s_registry_mutex, portMAX_DELAY);
+    int idx = find_device_by_id(id);
+    void *hdl = NULL;
+    if (idx >= 0) {
+        hdl = s_devices[idx].rmaker_device_hdl;
+    }
+    xSemaphoreGive(s_registry_mutex);
+    return hdl;
 }

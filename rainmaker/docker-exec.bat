@@ -1,35 +1,40 @@
 @echo off
 setlocal enabledelayedexpansion
 
-echo Verificando container esp-rainmaker-dev...
+echo Verificando container esp-matter-dev...
 
 docker ps -a --filter "name=^/esp-matter-dev$" --format "{{.Names}}" > "%TEMP%\docker_check.txt"
 set /p CONTAINER_NAME=<"%TEMP%\docker_check.txt"
 
 if "%CONTAINER_NAME%"=="" (
     echo Container nao encontrado. Executando docker compose...
-    docker compose -f "%~dp0docker-compose.yml" up -d esp-rainmaker-dev
-    if %errorlevel% neq 0 exit /b %errorlevel%
+    docker compose -f "%~dp0docker-compose.yml" up -d esp-matter-dev
+    if %errorlevel% neq 0 (
+        echo Erro ao criar container.
+        exit /b %errorlevel%
+    )
     call :wait_ready
 ) else (
-    docker inspect -f "{{.State.Status}}" esp-rainmaker-dev > "%TEMP%\docker_state.txt"
+    echo Container encontrado: %CONTAINER_NAME%
+    docker inspect -f "{{.State.Status}}" esp-matter-dev > "%TEMP%\docker_state.txt"
     set /p STATE=<"%TEMP%\docker_state.txt"
     if "!STATE!" neq "running" (
         echo Container parado. Iniciando...
-            docker start esp-rainmaker-dev
-        if %errorlevel% neq 0 exit /b %errorlevel%
+        docker start esp-matter-dev
+        if %errorlevel% neq 0 (
+            echo Erro ao iniciar container.
+            exit /b %errorlevel%
+        )
         call :wait_ready
+    ) else (
+        echo Container ja esta rodando.
     )
 )
 
-echo Executando build...
-docker exec esp-rainmaker-dev /bin/bash -c "cd /project && source config.sh && idf.py build"
-if %errorlevel% neq 0 (
-    echo Build falhou.
-    exit /b %errorlevel%
-)
-echo Build concluido com sucesso.
-exit /b 0
+echo.
+echo Conectando ao container...
+docker exec -it esp-matter-dev /bin/bash -c "cd /project && source config.sh && exec /bin/bash"
+exit /b %errorlevel%
 
 :wait_ready
 echo Aguardando container ficar pronto...
@@ -43,7 +48,7 @@ if !WAIT_COUNT! gtr 30 (
 docker inspect -f "{{.State.Status}}" esp-matter-dev > "%TEMP%\docker_state.txt" 2>nul
 set /p STATE=<"%TEMP%\docker_state.txt"
 if "!STATE!"=="running" (
-    echo Container pronto (!WAIT_COUNT!s)
+    echo Container pronto! (!WAIT_COUNT!s)
     timeout /t 2 /nobreak >nul
     exit /b 0
 )

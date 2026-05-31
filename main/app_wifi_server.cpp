@@ -1,7 +1,6 @@
 #include "app_wifi_server.h"
-#include "app_bridge.h"
+#include "app_rmaker_gateway.h"
 #include "app_device_registry.h"
-#include "app_onboarding.h"
 #include <esp_log.h>
 #include <esp_http_server.h>
 #include <esp_netif.h>
@@ -29,7 +28,7 @@ extern const char dashboard_css_end[] asm("_binary_dashboard_css_end");
 
 // UDP Discovery
 #define DISCOVERY_PORT 5000
-#define BROADCAST_INTERVAL_US (10 * 1000000) // 10 seconds
+#define BROADCAST_INTERVAL_US (10 * 1000000)
 
 static TaskHandle_t s_udp_task = NULL;
 static int s_udp_socket = -1;
@@ -40,9 +39,9 @@ static httpd_handle_t s_ws_hd = NULL;
 
 static char s_bridge_ip[16] = "0.0.0.0";
 
-// UDP discovery IP cache: associates device IDs with source IPs
+// UDP discovery IP cache
 #define MAX_DISCOVERED_IPS 8
-#define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL) // 5 minutes
+#define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL)
 
 typedef struct {
     char id[MAX_DEVICE_ID_LEN];
@@ -107,7 +106,7 @@ void wifi_server_update_ip(const char *ip)
 {
     strncpy(s_bridge_ip, ip, sizeof(s_bridge_ip) - 1);
     s_bridge_ip[sizeof(s_bridge_ip) - 1] = '\0';
-    ESP_LOGI(TAG, "Cached bridge IP updated: %s", s_bridge_ip);
+    ESP_LOGI(TAG, "Cached gateway IP updated: %s", s_bridge_ip);
 }
 
 static void handle_udp_discovery(void)
@@ -129,7 +128,7 @@ static void handle_udp_discovery(void)
             cJSON *svc = cJSON_GetObjectItem(root, "service");
             cJSON *disc = cJSON_GetObjectItem(root, "discover");
             if (svc && svc->valuestring &&
-                (strcmp(svc->valuestring, "esp-matter-bridge") == 0) &&
+                (strcmp(svc->valuestring, "esp-rmaker-gateway") == 0) &&
                 disc && cJSON_IsTrue(disc)) {
                 is_discovery = true;
             }
@@ -150,7 +149,7 @@ static void handle_udp_discovery(void)
         if (is_discovery && strcmp(s_bridge_ip, "0.0.0.0") != 0) {
             char resp[256];
             snprintf(resp, sizeof(resp),
-                "{\"service\":\"esp-matter-bridge\",\"ip_sta\":\"%s\",\"http_port\":80}",
+                "{\"service\":\"esp-rmaker-gateway\",\"ip_sta\":\"%s\",\"http_port\":80}",
                 s_bridge_ip);
             sendto(s_udp_socket, resp, strlen(resp), 0,
                    (struct sockaddr *)&src_addr, addr_len);
@@ -171,7 +170,7 @@ static void send_udp_broadcast(void)
     char resp[256];
     uint64_t uptime_s = esp_timer_get_time() / 1000000;
     snprintf(resp, sizeof(resp),
-        "{\"service\":\"esp-matter-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
+        "{\"service\":\"esp-rmaker-gateway\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
         s_bridge_ip, uptime_s);
 
     struct sockaddr_in bcast_addr;
@@ -346,12 +345,12 @@ static esp_err_t register_device_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    esp_err_t err = bridge_add_device(id, type, name);
+    esp_err_t err = rmaker_gateway_device_add(id, type, name);
     if (err != ESP_OK) {
         device_registry_remove_device(id);
         cJSON_Delete(root);
         free(buf);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "bridge add failed");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "gateway add failed");
         return ESP_FAIL;
     }
 
@@ -412,7 +411,13 @@ static esp_err_t remove_device_handler(httpd_req_t *req)
     }
 
     const char *id = id_item->valuestring;
-    esp_err_t err = bridge_remove_device(id);
+
+    esp_err_t err = rmaker_gateway_device_remove(id);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "rmaker_gateway_device_remove failed: %s", esp_err_to_name(err));
+    }
+
+    err = device_registry_remove_device(id);
     if (err != ESP_OK) {
         cJSON_Delete(root);
         free(buf);
@@ -478,6 +483,7 @@ static esp_err_t device_state_handler(httpd_req_t *req)
     if (!dev) {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         cJSON_Delete(root);
+        free(buf);
         return ESP_FAIL;
     }
 
@@ -498,7 +504,7 @@ static esp_err_t device_state_handler(httpd_req_t *req)
         }
 
         device_registry_update_state(id, key, value);
-        bridge_update_matter_state(id, key, value);
+        rmaker_gateway_device_update_state(id, key, value);
     }
 
     httpd_resp_set_type(req, "application/json");
@@ -565,13 +571,13 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     }
 
     bridged_device_t *dev = device_registry_get_by_id(id_str);
-    if (!dev || dev->matter_endpoint_id == 0) {
+    if (!dev) {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         return ESP_FAIL;
     }
 
     pending_command_t commands[MAX_PENDING_COMMANDS];
-    int count = device_registry_get_commands(dev->matter_endpoint_id, commands, MAX_PENDING_COMMANDS);
+    int count = device_registry_get_commands(id_str, commands, MAX_PENDING_COMMANDS);
 
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
@@ -626,7 +632,6 @@ static esp_err_t device_info_handler(httpd_req_t *req)
     cJSON_AddStringToObject(resp, "name", dev->name);
     cJSON_AddStringToObject(resp, "ip", dev->ip);
     cJSON_AddStringToObject(resp, "type", device_type_to_string(dev->type));
-    cJSON_AddNumberToObject(resp, "endpoint_id", dev->matter_endpoint_id);
     cJSON_AddBoolToObject(resp, "online", dev->online);
     const char *resp_str = cJSON_Print(resp);
     httpd_resp_sendstr(req, resp_str);
@@ -636,37 +641,10 @@ static esp_err_t device_info_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-static esp_err_t commissioning_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/json");
-    cJSON *resp = cJSON_CreateObject();
-    cJSON_AddNumberToObject(resp, "pin", 20202021);
-    cJSON_AddNumberToObject(resp, "discriminator", 3840);
-    cJSON_AddStringToObject(resp, "manual_code", onboarding_get_manual_code());
-    cJSON_AddStringToObject(resp, "qr_code_payload", onboarding_get_qr_payload());
-    const char *resp_str = cJSON_Print(resp);
-    httpd_resp_sendstr(req, resp_str);
-    free((void *)resp_str);
-    cJSON_Delete(resp);
-    return ESP_OK;
-}
-
 static esp_err_t ping_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
-    return ESP_OK;
-}
-
-static esp_err_t commissioning_start_handler(httpd_req_t *req)
-{
-    esp_err_t err = bridge_start_commissioning();
-    httpd_resp_set_type(req, "application/json");
-    if (err == ESP_OK) {
-        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Commissioning window opened for 60s\"}");
-    } else {
-        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"failed to start commissioning\"}");
-    }
     return ESP_OK;
 }
 
@@ -678,17 +656,6 @@ static esp_err_t reset_handler(httpd_req_t *req)
     fflush(stdout);
     vTaskDelay(pdMS_TO_TICKS(500));
     esp_restart();
-    return ESP_OK;
-}
-
-static esp_err_t factory_reset_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Factory reset...\"}");
-    ESP_LOGW(TAG, "Factory reset requested via API, clearing NVS...");
-    fflush(stdout);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    esp_matter::factory_reset();
     return ESP_OK;
 }
 
@@ -768,7 +735,7 @@ static esp_err_t dashboard_css_handler(httpd_req_t *req)
     return send_embedded_asset(req, dashboard_css_start, dashboard_css_end, "text/css");
 }
 
-static esp_err_t bridge_info_handler(httpd_req_t *req)
+static esp_err_t gateway_info_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
@@ -799,7 +766,6 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
             cJSON_AddStringToObject(item, "name", devices[i].name);
             cJSON_AddStringToObject(item, "ip", devices[i].ip);
             cJSON_AddStringToObject(item, "type", device_type_to_string(devices[i].type));
-            cJSON_AddNumberToObject(item, "endpoint_id", devices[i].matter_endpoint_id);
             cJSON_AddBoolToObject(item, "online", devices[i].online);
 
             const char *state_json = device_registry_get_state_json(devices[i].id);
@@ -897,21 +863,13 @@ esp_err_t wifi_server_start(void)
     };
     httpd_register_uri_handler(s_server, &list_uri);
 
-    httpd_uri_t bridge_info_uri = {
-        .uri = "/api/bridge/info",
+    httpd_uri_t gateway_info_uri = {
+        .uri = "/api/gateway/info",
         .method = HTTP_GET,
-        .handler = bridge_info_handler,
+        .handler = gateway_info_handler,
         .user_ctx = NULL
     };
-    httpd_register_uri_handler(s_server, &bridge_info_uri);
-
-    httpd_uri_t commissioning_uri = {
-        .uri = "/api/bridge/commissioning",
-        .method = HTTP_GET,
-        .handler = commissioning_handler,
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(s_server, &commissioning_uri);
+    httpd_register_uri_handler(s_server, &gateway_info_uri);
 
     httpd_uri_t ping_uri = {
         .uri = "/api/ping",
@@ -922,28 +880,12 @@ esp_err_t wifi_server_start(void)
     httpd_register_uri_handler(s_server, &ping_uri);
 
     httpd_uri_t reset_uri = {
-        .uri = "/api/bridge/reset",
+        .uri = "/api/gateway/reset",
         .method = HTTP_POST,
         .handler = reset_handler,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &reset_uri);
-
-    httpd_uri_t commission_uri = {
-        .uri = "/api/bridge/commission",
-        .method = HTTP_POST,
-        .handler = commissioning_start_handler,
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(s_server, &commission_uri);
-
-    httpd_uri_t factory_reset_uri = {
-        .uri = "/api/bridge/factory-reset",
-        .method = HTTP_POST,
-        .handler = factory_reset_handler,
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(s_server, &factory_reset_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",

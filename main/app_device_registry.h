@@ -7,10 +7,10 @@
 #define MAX_DEVICE_ID_LEN 48
 #define MAX_DEVICE_NAME_LEN 48
 #define MAX_DEVICE_STATE_LEN 48
-#define MAX_BRIDGED_DEVICES CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT
+#define MAX_BRIDGED_DEVICES 8
 #define MAX_PENDING_COMMANDS 4
 #define MAX_COMMAND_DATA_LEN 32
-#define DEVICE_ONLINE_TIMEOUT_US (120 * 1000000LL) // 2 min sem state → offline
+#define DEVICE_ONLINE_TIMEOUT_US (120 * 1000000LL)
 
 typedef enum {
     DEVICE_TYPE_ON_OFF = 0,
@@ -36,7 +36,7 @@ typedef struct {
     char ip[16];
     device_type_t type;
     bool registered;
-    uint16_t matter_endpoint_id;
+    void *rmaker_device_hdl;
     pending_command_t pending_commands[MAX_PENDING_COMMANDS];
     int pending_command_count;
     bool online;
@@ -46,18 +46,16 @@ typedef struct {
 
 device_type_t device_type_from_string(const char *type_str);
 const char *device_type_to_string(device_type_t type);
-uint32_t device_type_to_matter_id(device_type_t type);
 
 esp_err_t device_registry_init(void);
 int device_registry_register(const char *id, device_type_t type, const char *name, const char *ip);
 bridged_device_t *device_registry_get_by_id(const char *id);
-bridged_device_t *device_registry_get_by_endpoint(uint16_t endpoint_id);
 bridged_device_t *device_registry_get_all(int *count);
 esp_err_t device_registry_update_state(const char *id, const char *key, const char *value);
 const char *device_registry_get_state_json(const char *id);
-esp_err_t device_registry_add_command(uint16_t endpoint_id, const char *cluster, const char *command, const char *data);
-int device_registry_get_commands(uint16_t endpoint_id, pending_command_t *commands, int max_commands);
+esp_err_t device_registry_add_command(const char *id, const char *cluster, const char *command, const char *data);
+int device_registry_get_commands(const char *id, pending_command_t *commands, int max_commands);
 esp_err_t device_registry_remove_device(const char *id);
-void device_registry_set_endpoint_id(const char *id, uint16_t endpoint_id);
-void device_registry_get_stale_devices(uint16_t *ep_ids, int *count, int max);
 void device_registry_mark_seen(const char *id);
+void device_registry_set_rmaker_handle(const char *id, void *rmaker_dev);
+void *device_registry_get_rmaker_handle(const char *id);
