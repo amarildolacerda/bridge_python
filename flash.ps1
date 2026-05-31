@@ -42,7 +42,7 @@ foreach ($bin in $Binaries) {
 
 Write-Host "`nFlashando..." -ForegroundColor Yellow
 $global:LASTEXITCODE = 0
-& esptool $argsList
+python -m esptool @argsList
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`nFlash concluido com sucesso!" -ForegroundColor Green

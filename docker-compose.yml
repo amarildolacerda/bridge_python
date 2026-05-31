@@ -2,22 +2,29 @@ services:
   esp-matter-dev:
     image: espressif/esp-matter:latest
     container_name: esp-matter-dev
-    
     ports:
-      - "8080:8080"
       - "5000:5000/udp"
-      
-        
     volumes:
       - C:\git\bridge:/project
       - idf_cache:/root/.espressif
       - ccache:/root/.ccache
-    
     environment:
       - IDF_TARGET=esp32
       - CCACHE_DIR=/root/.ccache
-    
     command: /bin/bash -c "export IDF_TARGET=esp32 && source /opt/espressif/esp-matter/export.sh && source /opt/espressif/esp-idf/export.sh && cd /project && tail -f /dev/null"
+    networks:
+      - esp-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - esp-net
 
   opencode:
     image: ghcr.io/anomalyco/opencode:latest    
@@ -39,6 +46,20 @@ services:
     networks:
       - esp-net
 
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - C:\git\bridge\mosquitto_config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - esp-net
+
 networks:
   esp-net:
     driver: bridge
@@ -52,3 +73,5 @@ volumes:
     name: opencode_config
   opencode_data:
     name: opencode_data
+  ollama_data:
+    name: ollama_data
