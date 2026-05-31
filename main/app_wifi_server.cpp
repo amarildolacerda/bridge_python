@@ -41,7 +41,7 @@ static httpd_handle_t s_ws_hd = NULL;
 static char s_bridge_ip[16] = "0.0.0.0";
 
 // UDP discovery IP cache: associates device IDs with source IPs
-#define MAX_DISCOVERED_IPS 16
+#define MAX_DISCOVERED_IPS 8
 #define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL) // 5 minutes
 
 typedef struct {
@@ -658,6 +658,18 @@ static esp_err_t ping_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t commissioning_start_handler(httpd_req_t *req)
+{
+    esp_err_t err = bridge_start_commissioning();
+    httpd_resp_set_type(req, "application/json");
+    if (err == ESP_OK) {
+        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Commissioning window opened for 60s\"}");
+    } else {
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"failed to start commissioning\"}");
+    }
+    return ESP_OK;
+}
+
 static esp_err_t reset_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
@@ -810,7 +822,7 @@ esp_err_t wifi_server_start(void)
     config.server_port = 80;
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_uri_handlers = 16;
+    config.max_uri_handlers = 20;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {
@@ -905,6 +917,14 @@ esp_err_t wifi_server_start(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &reset_uri);
+
+    httpd_uri_t commission_uri = {
+        .uri = "/api/bridge/commission",
+        .method = HTTP_POST,
+        .handler = commissioning_start_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &commission_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",

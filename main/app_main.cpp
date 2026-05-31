@@ -47,8 +47,9 @@ using chip::RendezvousInformationFlag;
 static char s_manual_code[32] = {0};
 static char s_qr_payload[256] = {0};
 
-// Mutex for protecting Matter operations
 static SemaphoreHandle_t xMatterMutex = NULL;
+
+static SemaphoreHandle_t s_wifi_got_ip = NULL;
 
 const char *onboarding_get_manual_code(void) { return s_manual_code; }
 const char *onboarding_get_qr_payload(void) { return s_qr_payload; }
@@ -83,6 +84,39 @@ static void print_onboarding_codes(void)
     }
 }
 
+static void open_commissioning_window_work(intptr_t)
+{
+    ESP_LOGI(TAG, "Reabrindo janela de comissionamento por 60s");
+    chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(
+        chip::System::Clock::Seconds32(60));
+    print_onboarding_codes();
+}
+
+esp_err_t bridge_start_commissioning(void)
+{
+    ESP_LOGI(TAG, "bridge_start_commissioning called");
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(open_commissioning_window_work, 0);
+    return ESP_OK;
+}
+
+static void disable_ble_commissioning(intptr_t)
+{
+    ESP_LOGI(TAG, "Desligando advertising BLE — aguardando WiFi");
+    chip::DeviceLayer::ConnectivityMgr().SetBLEAdvertisingEnabled(false);
+}
+
+static void enable_ble_commissioning(intptr_t)
+{
+    if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
+        ESP_LOGI(TAG, "WiFi conectado — habilitando BLE para commissioning");
+        chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(
+            chip::System::Clock::Seconds32(300));
+        print_onboarding_codes();
+    } else {
+        ESP_LOGI(TAG, "Bridge já comissionado — BLE desnecessário");
+    }
+}
+
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                  int32_t event_id, void *event_data)
 {
@@ -105,26 +139,27 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "  Acesse: http://%s", ip_str);
         ESP_LOGI(TAG, "═══════════════════════════════════════════════");
 
-        // HTTP server + onboarding codes now that WiFi is connected
         esp_err_t err = wifi_server_start();
         if (err == ESP_OK) {
             ESP_LOGI(TAG, "HTTP server started");
         } else {
             ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
         }
-        
-        print_onboarding_codes();
+
+        if (s_wifi_got_ip) {
+            xSemaphoreGive(s_wifi_got_ip);
+        }
+
+        chip::DeviceLayer::PlatformMgr().ScheduleWork(enable_ble_commissioning, 0);
     }
 }
 
 extern "C" void app_main()
 {
-    // Add delay to let system stabilize before starting services
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     esp_err_t err = ESP_OK;
 
-    // Initialize NVS
     err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -135,7 +170,6 @@ extern "C" void app_main()
         return;
     }
 
-    // Create mutex for protecting Matter operations
     xMatterMutex = xSemaphoreCreateMutex();
     if (xMatterMutex == NULL) {
         ESP_LOGE(TAG, "Failed to create Matter mutex");
@@ -147,8 +181,6 @@ extern "C" void app_main()
 
     device_registry_init();
 
-    // Initialize Matter stack BEFORE WiFi — enables BLE commissioning
-    // The Matter stack manages WiFi provisioning via commissioning flow
     ESP_LOGI(TAG, "Initializing Matter bridge...");
     err = bridge_init();
     if (err == ESP_OK) {
@@ -157,20 +189,26 @@ extern "C" void app_main()
         ESP_LOGE(TAG, "Failed to initialize bridge: %s", esp_err_to_name(err));
     }
 
-    // Register reset button
+    chip::DeviceLayer::PlatformMgr().ScheduleWork(disable_ble_commissioning, 0);
+
     app_reset_button_register();
 
-    // Register event handlers BEFORE starting WiFi
+    s_wifi_got_ip = xSemaphoreCreateBinary();
+
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
 
-    // Matter's InitWiFiStack() already created netif and called esp_wifi_init()
-    // We just need to set mode and start WiFi
     ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "ESP-Matter Bridge ready — aguardando WiFi via commissioning...");
-    ESP_LOGI(TAG, "Setup PIN: 20202021, Discriminator: 3840");
-    print_onboarding_codes();
+    ESP_LOGI(TAG, "Aguardando conexão WiFi (15s timeout)...");
+    if (xSemaphoreTake(s_wifi_got_ip, pdMS_TO_TICKS(15000)) == pdTRUE) {
+        ESP_LOGI(TAG, "WiFi conectado antes de habilitar BLE commissioning");
+    } else {
+        ESP_LOGW(TAG, "WiFi não conectou em 15s — habilitando BLE commissioning diretamente");
+        chip::DeviceLayer::PlatformMgr().ScheduleWork(enable_ble_commissioning, 0);
+    }
+
+    ESP_LOGI(TAG, "ESP-Matter Bridge ready — Setup PIN: 20202021, Discriminator: 3840");
 }

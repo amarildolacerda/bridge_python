@@ -147,7 +147,7 @@ static void bridge_update_matter_state_work(intptr_t arg)
 
 static void bridge_remove_stale_endpoints_work(intptr_t arg)
 {
-    int max_devices = MAX_BRIDGED_DEVICE_COUNT;
+    int max_devices = MAX_BRIDGED_DEVICES;
     uint16_t *endpoint_ids = (uint16_t *)calloc(max_devices, sizeof(uint16_t));
     if (!endpoint_ids) return;
 

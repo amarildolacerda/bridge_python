@@ -11,3 +11,4 @@ esp_err_t bridge_remove_device(const char *id);
 esp_err_t bridge_update_matter_state(const char *id, const char *key, const char *value);
 uint16_t bridge_get_aggregator_endpoint_id(void);
 esp_matter::node_t *bridge_get_node(void);
+esp_err_t bridge_start_commissioning(void);
