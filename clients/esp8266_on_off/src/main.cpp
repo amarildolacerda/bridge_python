@@ -247,18 +247,25 @@ static void maintain_bridge_discovery(void)
     }
 
     static unsigned long last_active_discovery = 0;
-    if (!s_bridge_discovered && now - last_active_discovery > 30000) {
-        last_active_discovery = now;
-        JsonDocument req;
-        req["service"] = "esp-rmaker-gateway";
-        req["discover"] = true;
-        req["id"] = DEVICE_ID;
-        String payload;
-        serializeJson(req, payload);
-        s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
-        s_udp.write((const uint8_t *)payload.c_str(), payload.length());
-        s_udp.endPacket();
-        Serial.printf("[%s] Discovery request sent\n", TAG);
+    unsigned long discovery_interval = s_bridge_discovered ? 60000 : 10000;
+    if (now - last_active_discovery > discovery_interval)
+    {
+        bool should_discover = !s_bridge_discovered;
+        if (s_bridge_discovered && !s_bridge_connected) should_discover = true;
+        if (should_discover)
+        {
+            last_active_discovery = now;
+            JsonDocument req;
+            req["service"] = "esp-rmaker-gateway";
+            req["discover"] = true;
+            req["id"] = DEVICE_ID;
+            String payload;
+            serializeJson(req, payload);
+            s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
+            s_udp.write((const uint8_t *)payload.c_str(), payload.length());
+            s_udp.endPacket();
+            Serial.printf("[%s] Discovery request sent\n", TAG);
+        }
     }
 }
 
@@ -302,7 +309,12 @@ static bool discover_bridge(void)
         delay(10);
     }
 
-    Serial.printf("[%s] Bridge discovery timeout, using configured: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
+    if (strcmp(BRIDGE_HOST, "0.0.0.0") != 0) {
+        Serial.printf("[%s] Bridge discovery timeout, using configured: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
+        s_bridge_discovered = true;
+        return true;
+    }
+    Serial.printf("[%s] Bridge discovery timeout, no fallback IP configured\n", TAG);
     return false;
 }
 
@@ -512,9 +524,12 @@ void setup(void)
     s_server.begin();
     Serial.printf("[%s] Web server at http://%s\n", TAG, WiFi.localIP().toString().c_str());
 
-    discover_bridge();
-    register_device();
-    send_state(true);
+    if (discover_bridge()) {
+        register_device();
+        send_state(true);
+    } else {
+        Serial.printf("[%s] No bridge available yet, waiting for discovery\n", TAG);
+    }
     Serial.printf("[%s] Ready!\n", TAG);
 }
 

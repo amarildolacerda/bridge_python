@@ -28,7 +28,8 @@ extern const char dashboard_css_end[] asm("_binary_dashboard_css_end");
 
 // UDP Discovery
 #define DISCOVERY_PORT 5000
-#define BROADCAST_INTERVAL_US (10 * 1000000)
+#define BROADCAST_INTERVAL_US (300 * 1000000)
+#define BROADCAST_INITIAL_DELAY_US (30 * 1000000)
 
 static TaskHandle_t s_udp_task = NULL;
 static int s_udp_socket = -1;
@@ -122,7 +123,7 @@ static void handle_udp_discovery(void)
         buf[len] = '\0';
 
         bool is_discovery = false;
-        const char *discovered_id = NULL;
+        char discovered_id[MAX_DEVICE_ID_LEN] = {0};
         cJSON *root = cJSON_Parse(buf);
         if (root) {
             cJSON *svc = cJSON_GetObjectItem(root, "service");
@@ -134,12 +135,12 @@ static void handle_udp_discovery(void)
             }
             cJSON *id_item = cJSON_GetObjectItem(root, "id");
             if (id_item && id_item->valuestring) {
-                discovered_id = id_item->valuestring;
+                strncpy(discovered_id, id_item->valuestring, sizeof(discovered_id) - 1);
             }
             cJSON_Delete(root);
         }
 
-        if (discovered_id) {
+        if (discovered_id[0]) {
             char src_ip_str[16];
             inet_ntop(AF_INET, &src_addr.sin_addr, src_ip_str, sizeof(src_ip_str));
             cache_discovered_ip(discovered_id, src_ip_str);
@@ -221,9 +222,20 @@ static void udp_discovery_task(void *pv)
         }
     }
 
-    int64_t last_broadcast = 0;
+    int64_t last_broadcast = esp_timer_get_time() - BROADCAST_INTERVAL_US + BROADCAST_INITIAL_DELAY_US;
     while (1) {
         handle_udp_discovery();
+
+        if (strcmp(s_bridge_ip, "0.0.0.0") == 0) {
+            esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (netif) {
+                esp_netif_ip_info_t ip_info;
+                if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+                    snprintf(s_bridge_ip, sizeof(s_bridge_ip), IPSTR, IP2STR(&ip_info.ip));
+                    ESP_LOGI(TAG, "UDP discovery IP acquired: %s", s_bridge_ip);
+                }
+            }
+        }
 
         int64_t now = esp_timer_get_time();
         if (now - last_broadcast >= BROADCAST_INTERVAL_US) {
@@ -641,6 +653,44 @@ static esp_err_t device_info_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t device_heartbeat_handler(httpd_req_t *req)
+{
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len >= 256) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid body");
+        return ESP_FAIL;
+    }
+
+    char buf[256];
+    int cur = 0;
+    while (cur < total_len) {
+        int r = httpd_req_recv(req, buf + cur, total_len - cur);
+        if (r <= 0) break;
+        cur += r;
+    }
+    buf[cur] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
+        return ESP_FAIL;
+    }
+
+    cJSON *id_item = cJSON_GetObjectItem(root, "id");
+    if (!id_item || !id_item->valuestring) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
+        return ESP_FAIL;
+    }
+
+    device_registry_mark_seen(id_item->valuestring);
+    cJSON_Delete(root);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+    return ESP_OK;
+}
+
 static esp_err_t ping_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
@@ -800,6 +850,8 @@ esp_err_t wifi_server_start(void)
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.max_uri_handlers = 20;
+    config.max_open_sockets = 7;
+    config.keep_alive_enable = true;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {
@@ -878,6 +930,14 @@ esp_err_t wifi_server_start(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(s_server, &ping_uri);
+
+    httpd_uri_t heartbeat_uri = {
+        .uri = "/api/device/heartbeat",
+        .method = HTTP_POST,
+        .handler = device_heartbeat_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(s_server, &heartbeat_uri);
 
     httpd_uri_t reset_uri = {
         .uri = "/api/gateway/reset",
