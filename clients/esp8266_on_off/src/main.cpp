@@ -71,7 +71,8 @@ static bool http_post(const char *path, const String &body)
     int code = s_http.POST(body);
     bool ok = (code == 200);
     s_bridge_connected = ok;
-    if (!ok) {
+    if (!ok)
+    {
         Serial.printf("[%s] POST %s -> %d\n", TAG, path, code);
     }
     s_http.end();
@@ -91,9 +92,12 @@ static bool register_device(void)
     }
     Serial.printf("[%s] Registering device: %s\n", TAG, DEVICE_ID);
     bool ok = http_post("/api/device/register", body);
-    if (ok) {
+    if (ok)
+    {
         Serial.printf("[%s] Device registered successfully\n", TAG);
-    } else {
+    }
+    else
+    {
         Serial.printf("[%s] Failed to register device\n", TAG);
     }
     return ok;
@@ -101,7 +105,8 @@ static bool register_device(void)
 
 static void send_state(bool force)
 {
-    if (!s_bridge_discovered || !s_bridge_connected) return;
+    if (!s_bridge_discovered || !s_bridge_connected)
+        return;
 
     const char *type = get_device_type_string();
 
@@ -111,45 +116,66 @@ static void send_state(bool force)
     static float s_last_hum = -999;
 
     bool changed = false;
-    if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0) {
+    if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0)
+    {
         changed = (s_onoff_state != s_last_onoff);
-    } else if (strcmp(type, "dimmable") == 0) {
+    }
+    else if (strcmp(type, "dimmable") == 0)
+    {
         changed = (s_onoff_state != s_last_onoff || s_dimmer_level != s_last_level);
-    } else if (strcmp(type, "temperature") == 0) {
+    }
+    else if (strcmp(type, "temperature") == 0)
+    {
         changed = (abs(s_temperature - s_last_temp) > 0.1 || abs(s_humidity - s_last_hum) > 0.1);
     }
 
-    if (!changed && !force) return;
+    if (!changed && !force)
+        return;
 
     String body;
     {
         JsonDocument doc;
         doc["id"] = DEVICE_ID;
 
-        if (strcmp(type, "onoff") == 0) {
+        if (strcmp(type, "onoff") == 0)
+        {
             doc["on"] = s_onoff_state;
-        } else if (strcmp(type, "dimmable") == 0) {
+        }
+        else if (strcmp(type, "dimmable") == 0)
+        {
             doc["on"] = s_onoff_state;
             doc["level"] = s_dimmer_level;
-        } else if (strcmp(type, "temperature") == 0) {
+        }
+        else if (strcmp(type, "temperature") == 0)
+        {
             doc["temperature"] = s_temperature;
             doc["humidity"] = s_humidity;
-        } else if (strcmp(type, "contact") == 0) {
+        }
+        else if (strcmp(type, "contact") == 0)
+        {
             doc["contact"] = s_onoff_state;
-        } else if (strcmp(type, "occupancy") == 0) {
+        }
+        else if (strcmp(type, "occupancy") == 0)
+        {
             doc["occupancy"] = s_onoff_state;
         }
 
         serializeJson(doc, body);
     }
 
-    if (http_post("/api/device/state", body)) {
-        if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0) {
+    if (http_post("/api/device/state", body))
+    {
+        if (strcmp(type, "onoff") == 0 || strcmp(type, "contact") == 0 || strcmp(type, "occupancy") == 0)
+        {
             s_last_onoff = s_onoff_state;
-        } else if (strcmp(type, "dimmable") == 0) {
+        }
+        else if (strcmp(type, "dimmable") == 0)
+        {
             s_last_onoff = s_onoff_state;
             s_last_level = s_dimmer_level;
-        } else if (strcmp(type, "temperature") == 0) {
+        }
+        else if (strcmp(type, "temperature") == 0)
+        {
             s_last_temp = s_temperature;
             s_last_hum = s_humidity;
         }
@@ -169,48 +195,59 @@ static void send_state(bool force)
 
 static void poll_commands(void)
 {
-    if (!s_bridge_connected) return;
+    if (!s_bridge_connected)
+        return;
 
     String url = String("http://") + s_bridge_host + ":" + s_bridge_port + "/api/device/commands?id=" + DEVICE_ID;
 
     s_http.begin(s_wifi, url);
     int code = s_http.GET();
-    if (code == 200) {
+    if (code == 200)
+    {
         String response = s_http.getString();
         s_http.end();
 
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, response);
-        if (error) return;
+        if (error)
+            return;
 
         JsonArray cmds = doc["commands"].as<JsonArray>();
-        for (JsonVariant cmd : cmds) {
+        for (JsonVariant cmd : cmds)
+        {
             const char *cluster = cmd["cluster"];
             const char *command = cmd["command"];
             const char *data = cmd["data"];
 
             Serial.printf("[%s] Command: %s/%s = %s\n", TAG, cluster, command, data);
 
-            if (strcmp(cluster, "onoff") == 0 && strcmp(command, "set_onoff") == 0) {
+            if (strcmp(cluster, "onoff") == 0 && strcmp(command, "set_onoff") == 0)
+            {
                 s_onoff_state = (strcmp(data, "1") == 0 || strcmp(data, "true") == 0);
 #ifdef RELAY_PIN
                 digitalWrite(RELAY_PIN, s_onoff_state ? HIGH : LOW);
 #endif
                 send_state(true);
-            } else if (strcmp(cluster, "levelcontrol") == 0 && strcmp(command, "set_level") == 0) {
+            }
+            else if (strcmp(cluster, "levelcontrol") == 0 && strcmp(command, "set_level") == 0)
+            {
                 s_dimmer_level = atoi(data);
 #ifdef RELAY_PIN
                 analogWriteRange(1023);
                 analogWrite(RELAY_PIN, map(s_dimmer_level, 0, 254, 0, 1023));
 #endif
                 send_state(true);
-            } else if (strcmp(cluster, "system") == 0 && strcmp(command, "restart") == 0) {
+            }
+            else if (strcmp(cluster, "system") == 0 && strcmp(command, "restart") == 0)
+            {
                 Serial.printf("[%s] Restart command received\n", TAG);
                 delay(500);
                 ESP.restart();
             }
         }
-    } else {
+    }
+    else
+    {
         s_http.end();
     }
 }
@@ -218,24 +255,31 @@ static void poll_commands(void)
 static void maintain_bridge_discovery(void)
 {
     unsigned long now = millis();
-    if (now - s_last_broadcast_check < 100) return;
+    if (now - s_last_broadcast_check < 100)
+        return;
     s_last_broadcast_check = now;
 
     int packet_size = s_udp.parsePacket();
-    if (packet_size) {
+    if (packet_size)
+    {
         char buffer[512];
         int len = s_udp.read(buffer, sizeof(buffer) - 1);
         buffer[len] = '\0';
 
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, buffer);
-        if (!error && doc.containsKey("service")) {
-                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0) {
+        if (!error && doc.containsKey("service"))
+        {
+            if (strcmp(doc["service"], "esp-bridge") == 0)
+            {
                 const char *host = doc["ip_sta"];
                 int port = doc["http_port"] | 0;
-                if (!port) port = BRIDGE_PORT;
-                if (host && strlen(host) > 0) {
-                    if (strcmp(s_bridge_host, host) != 0 || s_bridge_port != port) {
+                if (!port)
+                    port = BRIDGE_PORT;
+                if (host && strlen(host) > 0)
+                {
+                    if (strcmp(s_bridge_host, host) != 0 || s_bridge_port != port)
+                    {
                         strcpy(s_bridge_host, host);
                         s_bridge_port = port;
                         s_bridge_discovered = true;
@@ -251,12 +295,13 @@ static void maintain_bridge_discovery(void)
     if (now - last_active_discovery > discovery_interval)
     {
         bool should_discover = !s_bridge_discovered;
-        if (s_bridge_discovered && !s_bridge_connected) should_discover = true;
+        if (s_bridge_discovered && !s_bridge_connected)
+            should_discover = true;
         if (should_discover)
         {
             last_active_discovery = now;
             JsonDocument req;
-            req["service"] = "esp-rmaker-gateway";
+            req["service"] = "esp-bridge";
             req["discover"] = true;
             req["id"] = DEVICE_ID;
             String payload;
@@ -272,7 +317,7 @@ static void maintain_bridge_discovery(void)
 static bool discover_bridge(void)
 {
     JsonDocument req;
-    req["service"] = "esp-rmaker-gateway";
+    req["service"] = "esp-bridge";
     req["discover"] = true;
     req["id"] = DEVICE_ID;
     String payload;
@@ -284,19 +329,24 @@ static bool discover_bridge(void)
     Serial.printf("[%s] Active discovery request sent\n", TAG);
 
     unsigned long start = millis();
-    while (millis() - start < 5000) {
+    while (millis() - start < 5000)
+    {
         int packet_size = s_udp.parsePacket();
-        if (packet_size) {
+        if (packet_size)
+        {
             char buffer[512];
             int len = s_udp.read(buffer, sizeof(buffer) - 1);
             buffer[len] = '\0';
 
             JsonDocument doc;
             DeserializationError error = deserializeJson(doc, buffer);
-            if (!error && doc.containsKey("service")) {
-                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0) {
+            if (!error && doc.containsKey("service"))
+            {
+                if (strcmp(doc["service"], "esp-bridge") == 0)
+                {
                     const char *host = doc["ip_sta"];
-                    if (host && strlen(host) > 0) {
+                    if (host && strlen(host) > 0)
+                    {
                         strcpy(s_bridge_host, host);
                         s_bridge_port = doc["http_port"] | BRIDGE_PORT;
                         s_bridge_discovered = true;
@@ -309,7 +359,8 @@ static bool discover_bridge(void)
         delay(10);
     }
 
-    if (strcmp(BRIDGE_HOST, "0.0.0.0") != 0) {
+    if (strcmp(BRIDGE_HOST, "0.0.0.0") != 0)
+    {
         Serial.printf("[%s] Bridge discovery timeout, using configured: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
         s_bridge_discovered = true;
         return true;
@@ -323,12 +374,14 @@ static bool wifi_setup(bool force_config_portal = false)
     WiFiManager wifiManager;
     wifiManager.setConnectTimeout(20);
 
-    if (!force_config_portal && WiFi.SSID() != "") {
+    if (!force_config_portal && WiFi.SSID() != "")
+    {
         wifiManager.setTimeout(180);
         wifiManager.setConnectRetries(3);
 
         Serial.printf("[%s] Connecting to saved WiFi: %s\n", TAG, WiFi.SSID().c_str());
-        if (wifiManager.autoConnect()) {
+        if (wifiManager.autoConnect())
+        {
             Serial.printf("[%s] WiFi connected! IP: %s\n", TAG, WiFi.localIP().toString().c_str());
             s_wifi_configuration_mode = false;
             return true;
@@ -346,11 +399,14 @@ static bool wifi_setup(bool force_config_portal = false)
     wifiManager.addParameter(&custom_bridge_host);
     wifiManager.addParameter(&custom_bridge_port);
 
-    if (wifiManager.startConfigPortal("ESP8266_Bridge", "password123")) {
-        if (strlen(custom_bridge_host.getValue()) > 0) {
+    if (wifiManager.startConfigPortal("ESP8266_Bridge", "password123"))
+    {
+        if (strlen(custom_bridge_host.getValue()) > 0)
+        {
             strcpy(s_bridge_host, custom_bridge_host.getValue());
             s_bridge_port = atoi(custom_bridge_port.getValue());
-            if (s_bridge_port == 0) s_bridge_port = BRIDGE_PORT;
+            if (s_bridge_port == 0)
+                s_bridge_port = BRIDGE_PORT;
         }
         s_wifi_configuration_mode = false;
         return true;
@@ -363,18 +419,22 @@ static bool wifi_setup(bool force_config_portal = false)
 
 static void maintain_wifi_connection(void)
 {
-    if (WiFi.status() == WL_CONNECTED) return;
+    if (WiFi.status() == WL_CONNECTED)
+        return;
 
     unsigned long now = millis();
-    if (now - s_last_reconnect_attempt < 30000) return;
+    if (now - s_last_reconnect_attempt < 30000)
+        return;
     s_last_reconnect_attempt = now;
 
     Serial.printf("[%s] WiFi disconnected. Reconnecting...\n", TAG);
     WiFi.begin();
 
     unsigned long connect_start = millis();
-    while (millis() - connect_start < 15000) {
-        if (WiFi.status() == WL_CONNECTED) {
+    while (millis() - connect_start < 15000)
+    {
+        if (WiFi.status() == WL_CONNECTED)
+        {
             Serial.printf("[%s] Reconnected! IP: %s\n", TAG, WiFi.localIP().toString().c_str());
             return;
         }
@@ -382,7 +442,8 @@ static void maintain_wifi_connection(void)
     }
 
     static unsigned long last_config_attempt = 0;
-    if (now - last_config_attempt > 300000) {
+    if (now - last_config_attempt > 300000)
+    {
         last_config_attempt = now;
         wifi_setup(true);
     }
@@ -393,13 +454,15 @@ static void read_sensors(void)
 #if DEVICE_TYPE == DEVICE_TYPE_TEMPERATURE
     static unsigned long last_sensor_read = 0;
 
-    if (millis() - last_sensor_read > 2000) {
+    if (millis() - last_sensor_read > 2000)
+    {
         s_temperature = 22.0 + (random(-30, 30) / 10.0);
         s_humidity = 50.0 + (random(-100, 100) / 10.0);
 
         static int counter = 0;
         counter++;
-        if (counter > 100) {
+        if (counter > 100)
+        {
             counter = 0;
             s_battery = max(0, s_battery - 1);
         }
@@ -413,7 +476,8 @@ static void read_sensors(void)
 static IRAM_ATTR void button_isr(void)
 {
     unsigned long now = millis();
-    if (now - s_last_interrupt > 300) {
+    if (now - s_last_interrupt > 300)
+    {
         s_button_pressed = true;
         s_last_interrupt = now;
     }
@@ -440,7 +504,8 @@ static void init_hardware(void)
 
 static void check_config_portal_timeout(void)
 {
-    if (s_wifi_configuration_mode && (millis() - s_wifi_config_start_time > 600000)) {
+    if (s_wifi_configuration_mode && (millis() - s_wifi_config_start_time > 600000))
+    {
         Serial.printf("[%s] Config portal timeout. Restarting...\n", TAG);
         ESP.restart();
     }
@@ -510,7 +575,8 @@ void setup(void)
     s_udp.begin(DISCOVERY_PORT);
     Serial.printf("[%s] UDP listener on port %d\n", TAG, DISCOVERY_PORT);
 
-    if (!wifi_setup(false)) {
+    if (!wifi_setup(false))
+    {
         Serial.printf("[%s] WiFi setup failed, restarting...\n", TAG);
         delay(5000);
         ESP.restart();
@@ -524,10 +590,13 @@ void setup(void)
     s_server.begin();
     Serial.printf("[%s] Web server at http://%s\n", TAG, WiFi.localIP().toString().c_str());
 
-    if (discover_bridge()) {
+    if (discover_bridge())
+    {
         register_device();
         send_state(true);
-    } else {
+    }
+    else
+    {
         Serial.printf("[%s] No bridge available yet, waiting for discovery\n", TAG);
     }
     Serial.printf("[%s] Ready!\n", TAG);
@@ -538,7 +607,8 @@ void loop(void)
     check_config_portal_timeout();
     s_server.handleClient();
 
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED)
+    {
         maintain_wifi_connection();
         delay(1000);
         return;
@@ -548,26 +618,31 @@ void loop(void)
 
     unsigned long now = millis();
 
-    if (!s_bridge_connected && s_bridge_discovered && now - s_last_bridge_reconnect > 30000) {
+    if (!s_bridge_connected && s_bridge_discovered && now - s_last_bridge_reconnect > 30000)
+    {
         s_last_bridge_reconnect = now;
-        if (register_device()) {
+        if (register_device())
+        {
             s_last_state_update = now;
             send_state(true);
         }
     }
 
-    if (now - s_last_command_poll > COMMAND_POLL_INTERVAL) {
+    if (now - s_last_command_poll > COMMAND_POLL_INTERVAL)
+    {
         s_last_command_poll = now;
         poll_commands();
     }
 
-    if (s_pending_state_sync) {
+    if (s_pending_state_sync)
+    {
         s_pending_state_sync = false;
         send_state(true);
     }
 
 #ifdef BUTTON_PIN
-    if (s_button_pressed) {
+    if (s_button_pressed)
+    {
         s_button_pressed = false;
         s_onoff_state = !s_onoff_state;
 #ifdef RELAY_PIN
@@ -577,12 +652,14 @@ void loop(void)
     }
 #endif
 
-    if (now - s_last_telemetry_update > TELEMETRY_INTERVAL) {
+    if (now - s_last_telemetry_update > TELEMETRY_INTERVAL)
+    {
         s_last_telemetry_update = now;
         Serial.printf("[%s] RSSI=%d dBm  up=%lus\n", TAG, WiFi.RSSI(), (millis() - s_start_time) / 1000);
     }
 
-    if (now - s_last_state_update > HEARTBEAT_INTERVAL) {
+    if (now - s_last_state_update > HEARTBEAT_INTERVAL)
+    {
         s_last_state_update = now;
         read_sensors();
         send_state(true);
@@ -590,13 +667,28 @@ void loop(void)
 
 #ifdef LED_PIN
     static unsigned long last_led = 0;
-    if (s_wifi_configuration_mode) {
+    if (s_wifi_configuration_mode)
+    {
         digitalWrite(LED_PIN, HIGH);
-    } else if (WiFi.status() != WL_CONNECTED) {
-        if (now - last_led >= 200) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
-    } else if (!s_bridge_connected) {
-        if (now - last_led >= 2000) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
-    } else {
+    }
+    else if (WiFi.status() != WL_CONNECTED)
+    {
+        if (now - last_led >= 200)
+        {
+            last_led = now;
+            digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        }
+    }
+    else if (!s_bridge_connected)
+    {
+        if (now - last_led >= 2000)
+        {
+            last_led = now;
+            digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        }
+    }
+    else
+    {
         digitalWrite(LED_PIN, LOW);
     }
 #endif

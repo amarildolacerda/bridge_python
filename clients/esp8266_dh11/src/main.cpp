@@ -102,7 +102,8 @@ static bool register_device(void)
 
 static void send_heartbeat(void)
 {
-    if (!s_bridge_discovered || !s_bridge_connected) return;
+    if (!s_bridge_discovered || !s_bridge_connected)
+        return;
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + "/api/device/heartbeat");
     s_http.addHeader("Content-Type", "application/json");
     s_http.setTimeout(3000);
@@ -113,12 +114,14 @@ static void send_heartbeat(void)
 
 static void send_state(bool force)
 {
-    if (!s_bridge_discovered || !s_bridge_connected) return;
+    if (!s_bridge_discovered || !s_bridge_connected)
+        return;
 
     static float last_temp = -999;
     static float last_hum = -999;
     bool changed = (abs(s_temperature - last_temp) > 0.1 || abs(s_humidity - last_hum) > 0.1);
-    if (!force && !changed) return;
+    if (!force && !changed)
+        return;
 
     String body;
     {
@@ -155,7 +158,7 @@ static void maintain_bridge_discovery(void)
         DeserializationError error = deserializeJson(doc, buffer);
         if (!error && doc.containsKey("service"))
         {
-                if (strcmp(doc["service"], "esp-rmaker-gateway") == 0)
+            if (strcmp(doc["service"], "esp-bridge") == 0)
             {
                 const char *host = doc["ip_sta"];
                 int port = doc["http_port"] | 0;
@@ -180,12 +183,13 @@ static void maintain_bridge_discovery(void)
     if (now - last_active_discovery > discovery_interval)
     {
         bool should_discover = !s_bridge_discovered;
-        if (s_bridge_discovered && !s_bridge_connected) should_discover = true;
+        if (s_bridge_discovered && !s_bridge_connected)
+            should_discover = true;
         if (should_discover)
         {
             last_active_discovery = now;
             JsonDocument req;
-            req["service"] = "esp-rmaker-gateway";
+            req["service"] = "esp-bridge";
             req["discover"] = true;
             req["id"] = DEVICE_ID;
             String payload;
@@ -201,7 +205,7 @@ static void maintain_bridge_discovery(void)
 static bool discover_bridge(void)
 {
     JsonDocument req;
-    req["service"] = "esp-rmaker-gateway";
+    req["service"] = "esp-bridge";
     req["discover"] = true;
     req["id"] = DEVICE_ID;
     String payload;
@@ -226,7 +230,7 @@ static bool discover_bridge(void)
             DeserializationError error = deserializeJson(doc, buffer);
             if (!error && doc.containsKey("service"))
             {
-            if (strcmp(doc["service"], "esp-rmaker-gateway") == 0)
+                if (strcmp(doc["service"], "esp-bridge") == 0)
                 {
                     const char *host = doc["ip_sta"];
                     if (host && strlen(host) > 0)
@@ -243,7 +247,8 @@ static bool discover_bridge(void)
         delay(10);
     }
 
-    if (strcmp(BRIDGE_HOST, "0.0.0.0") != 0) {
+    if (strcmp(BRIDGE_HOST, "0.0.0.0") != 0)
+    {
         Serial.printf("[%s] Bridge discovery timeout, using configured: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
         s_bridge_discovered = true;
         return true;
@@ -429,10 +434,13 @@ void setup(void)
     s_server.begin();
     Serial.printf("[%s] Web server at http://%s\n", TAG, WiFi.localIP().toString().c_str());
 
-    if (discover_bridge()) {
+    if (discover_bridge())
+    {
         register_device();
         send_state(true);
-    } else {
+    }
+    else
+    {
         Serial.printf("[%s] No bridge available yet, waiting for discovery\n", TAG);
     }
     Serial.printf("[%s] Ready!\n", TAG);
@@ -480,13 +488,28 @@ void loop(void)
 
 #ifdef LED_PIN
     static unsigned long last_led = 0;
-    if (s_wifi_configuration_mode) {
+    if (s_wifi_configuration_mode)
+    {
         digitalWrite(LED_PIN, HIGH);
-    } else if (WiFi.status() != WL_CONNECTED) {
-        if (now - last_led >= 200) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
-    } else if (!s_bridge_discovered) {
-        if (now - last_led >= 2000) { last_led = now; digitalWrite(LED_PIN, !digitalRead(LED_PIN)); }
-    } else {
+    }
+    else if (WiFi.status() != WL_CONNECTED)
+    {
+        if (now - last_led >= 200)
+        {
+            last_led = now;
+            digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        }
+    }
+    else if (!s_bridge_discovered)
+    {
+        if (now - last_led >= 2000)
+        {
+            last_led = now;
+            digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        }
+    }
+    else
+    {
         digitalWrite(LED_PIN, LOW);
     }
 #endif

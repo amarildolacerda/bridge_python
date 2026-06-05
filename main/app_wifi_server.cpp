@@ -44,7 +44,8 @@ static char s_bridge_ip[16] = "0.0.0.0";
 #define MAX_DISCOVERED_IPS 8
 #define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL)
 
-typedef struct {
+typedef struct
+{
     char id[MAX_DEVICE_ID_LEN];
     char ip[16];
     int64_t last_seen_us;
@@ -54,17 +55,22 @@ static discovered_ip_t s_discovered_ips[MAX_DISCOVERED_IPS];
 
 static void cache_discovered_ip(const char *id, const char *ip)
 {
-    if (!id || !*id || !ip) return;
-    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
-        if (strcmp(s_discovered_ips[i].id, id) == 0) {
+    if (!id || !*id || !ip)
+        return;
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++)
+    {
+        if (strcmp(s_discovered_ips[i].id, id) == 0)
+        {
             strncpy(s_discovered_ips[i].ip, ip, sizeof(s_discovered_ips[i].ip) - 1);
             s_discovered_ips[i].ip[sizeof(s_discovered_ips[i].ip) - 1] = '\0';
             s_discovered_ips[i].last_seen_us = esp_timer_get_time();
             return;
         }
     }
-    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
-        if (s_discovered_ips[i].id[0] == '\0') {
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++)
+    {
+        if (s_discovered_ips[i].id[0] == '\0')
+        {
             strncpy(s_discovered_ips[i].id, id, sizeof(s_discovered_ips[i].id) - 1);
             s_discovered_ips[i].id[sizeof(s_discovered_ips[i].id) - 1] = '\0';
             strncpy(s_discovered_ips[i].ip, ip, sizeof(s_discovered_ips[i].ip) - 1);
@@ -77,12 +83,16 @@ static void cache_discovered_ip(const char *id, const char *ip)
 
 static const char *lookup_discovered_ip(const char *id)
 {
-    if (!id || !*id) return NULL;
+    if (!id || !*id)
+        return NULL;
     int64_t now = esp_timer_get_time();
-    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++)
+    {
         if (s_discovered_ips[i].id[0] != '\0' &&
-            strcmp(s_discovered_ips[i].id, id) == 0) {
-            if (now - s_discovered_ips[i].last_seen_us < DISCOVERED_IP_TIMEOUT_US) {
+            strcmp(s_discovered_ips[i].id, id) == 0)
+        {
+            if (now - s_discovered_ips[i].last_seen_us < DISCOVERED_IP_TIMEOUT_US)
+            {
                 return s_discovered_ips[i].ip;
             }
             s_discovered_ips[i].id[0] = '\0';
@@ -95,9 +105,11 @@ static const char *lookup_discovered_ip(const char *id)
 static void cleanup_stale_discovered_ips(void)
 {
     int64_t now = esp_timer_get_time();
-    for (int i = 0; i < MAX_DISCOVERED_IPS; i++) {
+    for (int i = 0; i < MAX_DISCOVERED_IPS; i++)
+    {
         if (s_discovered_ips[i].id[0] != '\0' &&
-            now - s_discovered_ips[i].last_seen_us >= DISCOVERED_IP_TIMEOUT_US) {
+            now - s_discovered_ips[i].last_seen_us >= DISCOVERED_IP_TIMEOUT_US)
+        {
             s_discovered_ips[i].id[0] = '\0';
         }
     }
@@ -115,47 +127,56 @@ static void handle_udp_discovery(void)
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     char *buf = (char *)malloc(512);
-    if (!buf) return;
+    if (!buf)
+        return;
 
     int len = recvfrom(s_udp_socket, buf, 511, MSG_DONTWAIT,
                        (struct sockaddr *)&src_addr, &addr_len);
-    if (len > 0) {
+    if (len > 0)
+    {
         buf[len] = '\0';
 
         bool is_discovery = false;
         char discovered_id[MAX_DEVICE_ID_LEN] = {0};
         cJSON *root = cJSON_Parse(buf);
-        if (root) {
+        if (root)
+        {
             cJSON *svc = cJSON_GetObjectItem(root, "service");
             cJSON *disc = cJSON_GetObjectItem(root, "discover");
             if (svc && svc->valuestring &&
-                (strcmp(svc->valuestring, "esp-rmaker-gateway") == 0) &&
-                disc && cJSON_IsTrue(disc)) {
+                (strcmp(svc->valuestring, "esp-bridge") == 0) &&
+                disc && cJSON_IsTrue(disc))
+            {
                 is_discovery = true;
             }
             cJSON *id_item = cJSON_GetObjectItem(root, "id");
-            if (id_item && id_item->valuestring) {
+            if (id_item && id_item->valuestring)
+            {
                 strncpy(discovered_id, id_item->valuestring, sizeof(discovered_id) - 1);
             }
             cJSON_Delete(root);
         }
 
-        if (discovered_id[0]) {
+        if (discovered_id[0])
+        {
             char src_ip_str[16];
             inet_ntop(AF_INET, &src_addr.sin_addr, src_ip_str, sizeof(src_ip_str));
             cache_discovered_ip(discovered_id, src_ip_str);
             ESP_LOGI(TAG, "Discovered device %s at IP %s", discovered_id, src_ip_str);
         }
 
-        if (is_discovery && strcmp(s_bridge_ip, "0.0.0.0") != 0) {
+        if (is_discovery && strcmp(s_bridge_ip, "0.0.0.0") != 0)
+        {
             char resp[256];
             snprintf(resp, sizeof(resp),
-                "{\"service\":\"esp-rmaker-gateway\",\"ip_sta\":\"%s\",\"http_port\":80}",
-                s_bridge_ip);
+                     "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80}",
+                     s_bridge_ip);
             sendto(s_udp_socket, resp, strlen(resp), 0,
                    (struct sockaddr *)&src_addr, addr_len);
             ESP_LOGI(TAG, "UDP discovery response sent to %s", inet_ntoa(src_addr.sin_addr));
-        } else if (is_discovery) {
+        }
+        else if (is_discovery)
+        {
             ESP_LOGD(TAG, "UDP discovery request from %s (no IP yet, ignored)",
                      inet_ntoa(src_addr.sin_addr));
         }
@@ -166,13 +187,14 @@ static void handle_udp_discovery(void)
 
 static void send_udp_broadcast(void)
 {
-    if (strcmp(s_bridge_ip, "0.0.0.0") == 0) return;
+    if (strcmp(s_bridge_ip, "0.0.0.0") == 0)
+        return;
 
     char resp[256];
     uint64_t uptime_s = esp_timer_get_time() / 1000000;
     snprintf(resp, sizeof(resp),
-        "{\"service\":\"esp-rmaker-gateway\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
-        s_bridge_ip, uptime_s);
+             "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
+             s_bridge_ip, uptime_s);
 
     struct sockaddr_in bcast_addr;
     bcast_addr.sin_family = AF_INET;
@@ -186,7 +208,8 @@ static void send_udp_broadcast(void)
 static void udp_discovery_task(void *pv)
 {
     s_udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s_udp_socket < 0) {
+    if (s_udp_socket < 0)
+    {
         ESP_LOGE(TAG, "Failed to create UDP discovery socket");
         vTaskDelete(NULL);
         return;
@@ -201,7 +224,8 @@ static void udp_discovery_task(void *pv)
     server_addr.sin_port = htons(DISCOVERY_PORT);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(s_udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    if (bind(s_udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+    {
         ESP_LOGE(TAG, "Failed to bind UDP socket to port %d", DISCOVERY_PORT);
         close(s_udp_socket);
         s_udp_socket = -1;
@@ -213,9 +237,11 @@ static void udp_discovery_task(void *pv)
 
     {
         esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-        if (netif) {
+        if (netif)
+        {
             esp_netif_ip_info_t ip_info;
-            if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0)
+            {
                 snprintf(s_bridge_ip, sizeof(s_bridge_ip), IPSTR, IP2STR(&ip_info.ip));
                 ESP_LOGI(TAG, "UDP discovery using cached IP: %s", s_bridge_ip);
             }
@@ -223,14 +249,18 @@ static void udp_discovery_task(void *pv)
     }
 
     int64_t last_broadcast = esp_timer_get_time() - BROADCAST_INTERVAL_US + BROADCAST_INITIAL_DELAY_US;
-    while (1) {
+    while (1)
+    {
         handle_udp_discovery();
 
-        if (strcmp(s_bridge_ip, "0.0.0.0") == 0) {
+        if (strcmp(s_bridge_ip, "0.0.0.0") == 0)
+        {
             esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-            if (netif) {
+            if (netif)
+            {
                 esp_netif_ip_info_t ip_info;
-                if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+                if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0)
+                {
                     snprintf(s_bridge_ip, sizeof(s_bridge_ip), IPSTR, IP2STR(&ip_info.ip));
                     ESP_LOGI(TAG, "UDP discovery IP acquired: %s", s_bridge_ip);
                 }
@@ -238,7 +268,8 @@ static void udp_discovery_task(void *pv)
         }
 
         int64_t now = esp_timer_get_time();
-        if (now - last_broadcast >= BROADCAST_INTERVAL_US) {
+        if (now - last_broadcast >= BROADCAST_INTERVAL_US)
+        {
             last_broadcast = now;
             send_udp_broadcast();
         }
@@ -249,11 +280,13 @@ static void udp_discovery_task(void *pv)
 
 static void stop_udp_discovery(void)
 {
-    if (s_udp_task) {
+    if (s_udp_task)
+    {
         vTaskDelete(s_udp_task);
         s_udp_task = NULL;
     }
-    if (s_udp_socket >= 0) {
+    if (s_udp_socket >= 0)
+    {
         close(s_udp_socket);
         s_udp_socket = -1;
     }
@@ -261,9 +294,11 @@ static void stop_udp_discovery(void)
 
 static esp_err_t start_udp_discovery(void)
 {
-    if (s_udp_task) return ESP_OK;
+    if (s_udp_task)
+        return ESP_OK;
     BaseType_t ret = xTaskCreate(udp_discovery_task, "udp_disc", 3072, NULL, 5, &s_udp_task);
-    if (ret != pdPASS) {
+    if (ret != pdPASS)
+    {
         ESP_LOGE(TAG, "Failed to create UDP discovery task");
         return ESP_FAIL;
     }
@@ -273,21 +308,25 @@ static esp_err_t start_udp_discovery(void)
 static esp_err_t register_device_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
-    if (total_len >= SCRATCH_BUFSIZE) {
+    if (total_len >= SCRATCH_BUFSIZE)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
         return ESP_FAIL;
     }
 
     char *buf = (char *)malloc(SCRATCH_BUFSIZE);
-    if (!buf) {
+    if (!buf)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
         return ESP_FAIL;
     }
 
     int received = 0, cur_len = 0;
-    while (cur_len < total_len) {
+    while (cur_len < total_len)
+    {
         received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (received <= 0) {
+        if (received <= 0)
+        {
             free(buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
             return ESP_FAIL;
@@ -297,7 +336,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     buf[total_len] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    if (!root) {
+    if (!root)
+    {
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
@@ -307,7 +347,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     cJSON *type_item = cJSON_GetObjectItem(root, "type");
     cJSON *name_item = cJSON_GetObjectItem(root, "name");
 
-    if (!id_item || !id_item->valuestring || !type_item || !type_item->valuestring) {
+    if (!id_item || !id_item->valuestring || !type_item || !type_item->valuestring)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id or type");
@@ -321,19 +362,26 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     char client_ip[16] = "0.0.0.0";
 
     cJSON *ip_item = cJSON_GetObjectItem(root, "ip");
-    if (ip_item && ip_item->valuestring && strlen(ip_item->valuestring) > 0) {
+    if (ip_item && ip_item->valuestring && strlen(ip_item->valuestring) > 0)
+    {
         strncpy(client_ip, ip_item->valuestring, sizeof(client_ip) - 1);
         client_ip[sizeof(client_ip) - 1] = '\0';
-    } else {
+    }
+    else
+    {
         struct sockaddr_in addr;
         socklen_t addr_len = sizeof(addr);
         int fd = httpd_req_to_sockfd(req);
-        if (fd >= 0 && getpeername(fd, (struct sockaddr *)&addr, &addr_len) == 0) {
+        if (fd >= 0 && getpeername(fd, (struct sockaddr *)&addr, &addr_len) == 0)
+        {
             inet_ntop(AF_INET, &addr.sin_addr, client_ip, sizeof(client_ip));
-        } else {
+        }
+        else
+        {
             ESP_LOGW(TAG, "getpeername failed (fd=%d, errno=%d), trying UDP cache", fd, errno);
             const char *cached = lookup_discovered_ip(id);
-            if (cached) {
+            if (cached)
+            {
                 strncpy(client_ip, cached, sizeof(client_ip) - 1);
                 client_ip[sizeof(client_ip) - 1] = '\0';
                 ESP_LOGI(TAG, "Using UDP discovery cached IP for %s: %s", id, client_ip);
@@ -342,7 +390,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     }
 
     device_type_t type = device_type_from_string(type_str);
-    if (type == DEVICE_TYPE_UNKNOWN) {
+    if (type == DEVICE_TYPE_UNKNOWN)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "unsupported device type");
@@ -350,7 +399,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     }
 
     int slot = device_registry_register(id, type, name, client_ip);
-    if (slot < 0) {
+    if (slot < 0)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "registry full");
@@ -358,7 +408,8 @@ static esp_err_t register_device_handler(httpd_req_t *req)
     }
 
     esp_err_t err = rmaker_gateway_device_add(id, type, name);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         device_registry_remove_device(id);
         cJSON_Delete(root);
         free(buf);
@@ -384,21 +435,25 @@ static esp_err_t register_device_handler(httpd_req_t *req)
 static esp_err_t remove_device_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
-    if (total_len >= SCRATCH_BUFSIZE) {
+    if (total_len >= SCRATCH_BUFSIZE)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
         return ESP_FAIL;
     }
 
     char *buf = (char *)malloc(SCRATCH_BUFSIZE);
-    if (!buf) {
+    if (!buf)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
         return ESP_FAIL;
     }
 
     int received = 0, cur_len = 0;
-    while (cur_len < total_len) {
+    while (cur_len < total_len)
+    {
         received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (received <= 0) {
+        if (received <= 0)
+        {
             free(buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
             return ESP_FAIL;
@@ -408,14 +463,16 @@ static esp_err_t remove_device_handler(httpd_req_t *req)
     buf[total_len] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    if (!root) {
+    if (!root)
+    {
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
     }
 
     cJSON *id_item = cJSON_GetObjectItem(root, "id");
-    if (!id_item || !id_item->valuestring) {
+    if (!id_item || !id_item->valuestring)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
@@ -425,12 +482,14 @@ static esp_err_t remove_device_handler(httpd_req_t *req)
     const char *id = id_item->valuestring;
 
     esp_err_t err = rmaker_gateway_device_remove(id);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGW(TAG, "rmaker_gateway_device_remove failed: %s", esp_err_to_name(err));
     }
 
     err = device_registry_remove_device(id);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
@@ -452,21 +511,25 @@ static esp_err_t remove_device_handler(httpd_req_t *req)
 static esp_err_t device_state_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
-    if (total_len >= SCRATCH_BUFSIZE) {
+    if (total_len >= SCRATCH_BUFSIZE)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
         return ESP_FAIL;
     }
 
     char *buf = (char *)malloc(SCRATCH_BUFSIZE);
-    if (!buf) {
+    if (!buf)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no mem");
         return ESP_FAIL;
     }
 
     int received = 0, cur_len = 0;
-    while (cur_len < total_len) {
+    while (cur_len < total_len)
+    {
         received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (received <= 0) {
+        if (received <= 0)
+        {
             free(buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read error");
             return ESP_FAIL;
@@ -476,14 +539,16 @@ static esp_err_t device_state_handler(httpd_req_t *req)
     buf[total_len] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    if (!root) {
+    if (!root)
+    {
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
     }
 
     cJSON *id_item = cJSON_GetObjectItem(root, "id");
-    if (!id_item || !id_item->valuestring) {
+    if (!id_item || !id_item->valuestring)
+    {
         cJSON_Delete(root);
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
@@ -492,7 +557,8 @@ static esp_err_t device_state_handler(httpd_req_t *req)
 
     const char *id = id_item->valuestring;
     bridged_device_t *dev = device_registry_get_by_id(id);
-    if (!dev) {
+    if (!dev)
+    {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         cJSON_Delete(root);
         free(buf);
@@ -500,18 +566,27 @@ static esp_err_t device_state_handler(httpd_req_t *req)
     }
 
     cJSON *child = NULL;
-    cJSON_ArrayForEach(child, root) {
-        if (strcmp(child->string, "id") == 0) continue;
+    cJSON_ArrayForEach(child, root)
+    {
+        if (strcmp(child->string, "id") == 0)
+            continue;
 
         const char *key = child->string;
         char value[64];
-        if (cJSON_IsBool(child)) {
+        if (cJSON_IsBool(child))
+        {
             snprintf(value, sizeof(value), "%s", child->valueint ? "true" : "false");
-        } else if (cJSON_IsNumber(child)) {
+        }
+        else if (cJSON_IsNumber(child))
+        {
             snprintf(value, sizeof(value), "%g", child->valuedouble);
-        } else if (cJSON_IsString(child)) {
+        }
+        else if (cJSON_IsString(child))
+        {
             snprintf(value, sizeof(value), "%s", child->valuestring);
-        } else {
+        }
+        else
+        {
             continue;
         }
 
@@ -538,10 +613,13 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     char query[256] = {0};
     bool found = false;
 
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
+    {
         char *param = strtok(query, "&");
-        while (param) {
-            if (strncmp(param, "id=", 3) == 0) {
+        while (param)
+        {
+            if (strncmp(param, "id=", 3) == 0)
+            {
                 strncpy(id_str, param + 3, sizeof(id_str) - 1);
                 found = true;
                 break;
@@ -550,23 +628,30 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
         }
     }
 
-    if (!found) {
+    if (!found)
+    {
         int total_len = req->content_len;
-        if (total_len > 0 && total_len < SCRATCH_BUFSIZE) {
+        if (total_len > 0 && total_len < SCRATCH_BUFSIZE)
+        {
             char *buf = (char *)malloc(SCRATCH_BUFSIZE);
-            if (buf) {
+            if (buf)
+            {
                 int received = 0, cur_len = 0;
-                while (cur_len < total_len) {
+                while (cur_len < total_len)
+                {
                     received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-                    if (received <= 0) break;
+                    if (received <= 0)
+                        break;
                     cur_len += received;
                 }
                 buf[total_len] = '\0';
 
                 cJSON *root = cJSON_Parse(buf);
-                if (root) {
+                if (root)
+                {
                     cJSON *id_item = cJSON_GetObjectItem(root, "id");
-                    if (id_item && id_item->valuestring) {
+                    if (id_item && id_item->valuestring)
+                    {
                         strncpy(id_str, id_item->valuestring, sizeof(id_str) - 1);
                         found = true;
                     }
@@ -577,13 +662,15 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
         }
     }
 
-    if (!found) {
+    if (!found)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing device id");
         return ESP_FAIL;
     }
 
     bridged_device_t *dev = device_registry_get_by_id(id_str);
-    if (!dev) {
+    if (!dev)
+    {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         return ESP_FAIL;
     }
@@ -594,7 +681,8 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
     cJSON *cmd_array = cJSON_AddArrayToObject(resp, "commands");
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++)
+    {
         cJSON *cmd = cJSON_CreateObject();
         cJSON_AddStringToObject(cmd, "cluster", commands[i].cluster);
         cJSON_AddStringToObject(cmd, "command", commands[i].command);
@@ -615,10 +703,13 @@ static esp_err_t device_info_handler(httpd_req_t *req)
     char query[256] = {0};
     bool found = false;
 
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
+    {
         char *param = strtok(query, "&");
-        while (param) {
-            if (strncmp(param, "id=", 3) == 0) {
+        while (param)
+        {
+            if (strncmp(param, "id=", 3) == 0)
+            {
                 strncpy(id_str, param + 3, sizeof(id_str) - 1);
                 found = true;
                 break;
@@ -627,13 +718,15 @@ static esp_err_t device_info_handler(httpd_req_t *req)
         }
     }
 
-    if (!found) {
+    if (!found)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing device id");
         return ESP_FAIL;
     }
 
     bridged_device_t *dev = device_registry_get_by_id(id_str);
-    if (!dev) {
+    if (!dev)
+    {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         return ESP_FAIL;
     }
@@ -656,28 +749,33 @@ static esp_err_t device_info_handler(httpd_req_t *req)
 static esp_err_t device_heartbeat_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len >= 256) {
+    if (total_len <= 0 || total_len >= 256)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid body");
         return ESP_FAIL;
     }
 
     char buf[256];
     int cur = 0;
-    while (cur < total_len) {
+    while (cur < total_len)
+    {
         int r = httpd_req_recv(req, buf + cur, total_len - cur);
-        if (r <= 0) break;
+        if (r <= 0)
+            break;
         cur += r;
     }
     buf[cur] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    if (!root) {
+    if (!root)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
         return ESP_FAIL;
     }
 
     cJSON *id_item = cJSON_GetObjectItem(root, "id");
-    if (!id_item || !id_item->valuestring) {
+    if (!id_item || !id_item->valuestring)
+    {
         cJSON_Delete(root);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing id");
         return ESP_FAIL;
@@ -711,7 +809,8 @@ static esp_err_t reset_handler(httpd_req_t *req)
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    if (req->method == HTTP_GET) {
+    if (req->method == HTTP_GET)
+    {
         s_ws_hd = req->handle;
         s_ws_fd = httpd_req_to_sockfd(req);
         ESP_LOGI(TAG, "WS client connected fd=%d", s_ws_fd);
@@ -722,7 +821,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
     memset(&frame, 0, sizeof(frame));
     frame.type = HTTPD_WS_TYPE_TEXT;
     esp_err_t ret = httpd_ws_recv_frame(req, &frame, 0);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         s_ws_fd = -1;
         s_ws_hd = NULL;
         ESP_LOGI(TAG, "WS client disconnected");
@@ -732,9 +832,12 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 static void ws_monitor_task(void *pv)
 {
-    while (1) {
-        if (s_ws_fd >= 0 && s_ws_hd) {
-            if (httpd_ws_get_fd_info(s_ws_hd, s_ws_fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+    while (1)
+    {
+        if (s_ws_fd >= 0 && s_ws_hd)
+        {
+            if (httpd_ws_get_fd_info(s_ws_hd, s_ws_fd) != HTTPD_WS_CLIENT_WEBSOCKET)
+            {
                 s_ws_fd = -1;
                 s_ws_hd = NULL;
                 ESP_LOGI(TAG, "WS client disconnected");
@@ -745,18 +848,18 @@ static void ws_monitor_task(void *pv)
             uint64_t uptime_s = esp_timer_get_time() / 1000000;
             char json[256];
             int len = snprintf(json, sizeof(json),
-                "{\"t\":\"state\",\"ip\":\"%s\",\"uptime_s\":%llu,"
-                "\"free_heap\":%lu,\"min_free_heap\":%lu}",
-                s_bridge_ip, uptime_s,
-                (unsigned long)esp_get_free_heap_size(), (unsigned long)esp_get_minimum_free_heap_size());
+                               "{\"t\":\"state\",\"ip\":\"%s\",\"uptime_s\":%llu,"
+                               "\"free_heap\":%lu,\"min_free_heap\":%lu}",
+                               s_bridge_ip, uptime_s,
+                               (unsigned long)esp_get_free_heap_size(), (unsigned long)esp_get_minimum_free_heap_size());
 
             httpd_ws_frame_t frame = {
                 .type = HTTPD_WS_TYPE_TEXT,
                 .payload = (uint8_t *)json,
-                .len = (size_t)len
-            };
+                .len = (size_t)len};
             esp_err_t ret = httpd_ws_send_frame_async(s_ws_hd, s_ws_fd, &frame);
-            if (ret != ESP_OK) {
+            if (ret != ESP_OK)
+            {
                 s_ws_fd = -1;
                 s_ws_hd = NULL;
                 ESP_LOGI(TAG, "WS send failed, client removed");
@@ -809,8 +912,10 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
     int count = 0;
     bridged_device_t *devices = device_registry_get_all(&count);
 
-    for (int i = 0; i < count; i++) {
-        if (devices[i].registered) {
+    for (int i = 0; i < count; i++)
+    {
+        if (devices[i].registered)
+        {
             cJSON *item = cJSON_CreateObject();
             cJSON_AddStringToObject(item, "id", devices[i].id);
             cJSON_AddStringToObject(item, "name", devices[i].name);
@@ -819,9 +924,11 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
             cJSON_AddBoolToObject(item, "online", devices[i].online);
 
             const char *state_json = device_registry_get_state_json(devices[i].id);
-            if (strcmp(state_json, "{}") != 0) {
+            if (strcmp(state_json, "{}") != 0)
+            {
                 cJSON *state = cJSON_Parse(state_json);
-                if (state) {
+                if (state)
+                {
                     cJSON_AddItemToObject(item, "state", state);
                 }
             }
@@ -840,7 +947,8 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
 
 esp_err_t wifi_server_start(void)
 {
-    if (s_server) {
+    if (s_server)
+    {
         ESP_LOGW(TAG, "Server already running");
         return ESP_OK;
     }
@@ -854,7 +962,8 @@ esp_err_t wifi_server_start(void)
     config.keep_alive_enable = true;
 
     esp_err_t err = httpd_start(&s_server, &config);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
         return err;
     }
@@ -863,104 +972,91 @@ esp_err_t wifi_server_start(void)
         .uri = "/api/device/register",
         .method = HTTP_POST,
         .handler = register_device_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &register_uri);
 
     httpd_uri_t remove_uri = {
         .uri = "/api/device/remove",
         .method = HTTP_POST,
         .handler = remove_device_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &remove_uri);
 
     httpd_uri_t state_uri = {
         .uri = "/api/device/state",
         .method = HTTP_POST,
         .handler = device_state_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &state_uri);
 
     httpd_uri_t commands_uri = {
         .uri = "/api/device/commands",
         .method = HTTP_GET,
         .handler = device_commands_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &commands_uri);
 
     httpd_uri_t commands_post_uri = {
         .uri = "/api/device/commands",
         .method = HTTP_POST,
         .handler = device_commands_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &commands_post_uri);
 
     httpd_uri_t info_uri = {
         .uri = "/api/device/info",
         .method = HTTP_GET,
         .handler = device_info_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &info_uri);
 
     httpd_uri_t list_uri = {
         .uri = "/api/devices",
         .method = HTTP_GET,
         .handler = devices_list_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &list_uri);
 
     httpd_uri_t gateway_info_uri = {
         .uri = "/api/gateway/info",
         .method = HTTP_GET,
         .handler = gateway_info_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &gateway_info_uri);
 
     httpd_uri_t ping_uri = {
         .uri = "/api/ping",
         .method = HTTP_GET,
         .handler = ping_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &ping_uri);
 
     httpd_uri_t heartbeat_uri = {
         .uri = "/api/device/heartbeat",
         .method = HTTP_POST,
         .handler = device_heartbeat_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &heartbeat_uri);
 
     httpd_uri_t reset_uri = {
         .uri = "/api/gateway/reset",
         .method = HTTP_POST,
         .handler = reset_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &reset_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",
         .method = HTTP_GET,
         .handler = dashboard_html_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &root_uri);
 
     httpd_uri_t css_uri = {
         .uri = "/dashboard.css",
         .method = HTTP_GET,
         .handler = dashboard_css_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &css_uri);
 
     httpd_uri_t ws_uri = {
@@ -968,14 +1064,14 @@ esp_err_t wifi_server_start(void)
         .method = HTTP_GET,
         .handler = ws_handler,
         .user_ctx = NULL,
-        .is_websocket = true
-    };
+        .is_websocket = true};
     httpd_register_uri_handler(s_server, &ws_uri);
 
     xTaskCreatePinnedToCore(ws_monitor_task, "ws_monitor", 3072, NULL, 5, NULL, tskNO_AFFINITY);
 
     err = start_udp_discovery();
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGW(TAG, "Failed to start UDP discovery (non-fatal)");
     }
 
@@ -988,7 +1084,8 @@ esp_err_t wifi_server_stop(void)
     stop_udp_discovery();
     s_ws_fd = -1;
     s_ws_hd = NULL;
-    if (s_server) {
+    if (s_server)
+    {
         httpd_stop(s_server);
         s_server = NULL;
         ESP_LOGI(TAG, "HTTP server stopped");
