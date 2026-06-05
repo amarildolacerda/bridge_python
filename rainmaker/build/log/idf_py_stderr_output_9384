@@ -1,8 +1,0 @@
-CMake Error at C:/Users/amari/esp/v5.4.1/esp-idf/tools/cmake/project.cmake:472 (message):
-  Directory specified in EXTRA_COMPONENT_DIRS doesn't exist:
-  /opt/espressif/esp-rainmaker/components
-Call Stack (most recent call first):
-  C:/Users/amari/esp/v5.4.1/esp-idf/tools/cmake/project.cmake:556 (__project_init)
-  CMakeLists.txt:19 (project)
-
-

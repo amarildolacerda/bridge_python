@@ -1,6 +1,0 @@
-Command: ninja all
-[1/7] Performing build step for 'bootloader'
-[1/1] cd /project/rainmaker/build/bootloader/esp-idf/esptool_py && /opt/espressif/tools/python_env/idf5.5_py3.12_env/bin/python /opt/espressif/esp-idf/components/partition_table/check_sizes.py --offset 0xc000 bootloader 0x1000 /project/rainmaker/build/bootloader/bootloader.bin
-Bootloader binary size 0x6680 bytes. 0x4980 bytes (42%) free.
-[2/7] No install step for 'bootloader'
-[3/7] Completed 'bootloader'
