@@ -35,22 +35,33 @@ static void device_registry_save(void)
     }
 
     uint8_t count = 0;
-    persisted_device_t pdevs[MAX_BRIDGED_DEVICES];
-    memset(pdevs, 0, sizeof(pdevs));
-
     for (int i = 0; i < MAX_BRIDGED_DEVICES; i++) {
-        if (s_devices[i].registered) {
-            strncpy(pdevs[count].id, s_devices[i].id, MAX_DEVICE_ID_LEN - 1);
-            strncpy(pdevs[count].name, s_devices[i].name, MAX_DEVICE_NAME_LEN - 1);
-            strncpy(pdevs[count].ip, s_devices[i].ip, sizeof(pdevs[count].ip) - 1);
-            pdevs[count].type = (int32_t)s_devices[i].type;
-            strncpy(pdevs[count].state_json, s_devices[i].state_json, MAX_DEVICE_STATE_LEN - 1);
-            count++;
-        }
+        if (s_devices[i].registered) count++;
     }
 
     size_t blob_size = sizeof(uint8_t) + count * sizeof(persisted_device_t);
-    err = nvs_set_blob(nvs, NVS_KEY_DEVICES, &count, blob_size);
+    uint8_t *blob = (uint8_t *)malloc(blob_size);
+    if (!blob) {
+        nvs_close(nvs);
+        return;
+    }
+
+    blob[0] = count;
+    persisted_device_t *pdevs = (persisted_device_t *)(blob + sizeof(uint8_t));
+    int idx = 0;
+    for (int i = 0; i < MAX_BRIDGED_DEVICES; i++) {
+        if (s_devices[i].registered) {
+            strncpy(pdevs[idx].id, s_devices[i].id, MAX_DEVICE_ID_LEN - 1);
+            strncpy(pdevs[idx].name, s_devices[i].name, MAX_DEVICE_NAME_LEN - 1);
+            strncpy(pdevs[idx].ip, s_devices[i].ip, sizeof(pdevs[idx].ip) - 1);
+            pdevs[idx].type = (int32_t)s_devices[i].type;
+            strncpy(pdevs[idx].state_json, s_devices[i].state_json, MAX_DEVICE_STATE_LEN - 1);
+            idx++;
+        }
+    }
+
+    err = nvs_set_blob(nvs, NVS_KEY_DEVICES, blob, blob_size);
+    free(blob);
     if (err == ESP_OK) {
         err = nvs_commit(nvs);
     }

@@ -7,14 +7,15 @@
 #define MAX_DEVICE_ID_LEN 48
 #define MAX_DEVICE_NAME_LEN 48
 #define MAX_DEVICE_STATE_LEN 48
-#define MAX_BRIDGED_DEVICES 8
+#define MAX_BRIDGED_DEVICES 32
 #define MAX_PENDING_COMMANDS 4
 #define MAX_COMMAND_DATA_LEN 32
 #define DEVICE_ONLINE_TIMEOUT_US (120 * 1000000LL)
 
 #define NVS_DEVICE_NAMESPACE "dev_reg"
 
-typedef enum {
+typedef enum
+{
     DEVICE_TYPE_ON_OFF = 0,
     DEVICE_TYPE_DIMMABLE,
     DEVICE_TYPE_TEMPERATURE_SENSOR,
@@ -26,13 +27,15 @@ typedef enum {
     DEVICE_TYPE_UNKNOWN,
 } device_type_t;
 
-typedef struct {
+typedef struct
+{
     char command[32];
     char cluster[32];
     char data[MAX_COMMAND_DATA_LEN];
 } pending_command_t;
 
-typedef struct {
+typedef struct
+{
     char id[MAX_DEVICE_ID_LEN];
     char name[MAX_DEVICE_NAME_LEN];
     char ip[16];

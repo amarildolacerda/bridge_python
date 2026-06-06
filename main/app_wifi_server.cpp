@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <esp_system.h>
+#include "mdns.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -1073,6 +1074,18 @@ esp_err_t wifi_server_start(void)
     if (err != ESP_OK)
     {
         ESP_LOGW(TAG, "Failed to start UDP discovery (non-fatal)");
+    }
+
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK)
+    {
+        mdns_hostname_set("espbridge");
+        mdns_service_add("espbridge-http", "_http", "_tcp", 80, NULL, 0);
+        ESP_LOGI(TAG, "mDNS: espbridge.local");
+    }
+    else
+    {
+        ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_err));
     }
 
     ESP_LOGI(TAG, "HTTP REST server started on port %d", config.server_port);
