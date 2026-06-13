@@ -5,7 +5,7 @@
 #define WIFI_PASSWORD "3938373635"
 
 // ── Bridge (HTTP REST) ───────────────────────────────────────────────────────
-#define BRIDGE_HOST "192.168.1.100"
+#define BRIDGE_HOST "0.0.0.0"
 #define BRIDGE_PORT 80
 
 // ── Device Identity ──────────────────────────────────────────────────────────
