@@ -15,7 +15,6 @@ if [ -f /.dockerenv ] || [ -d /opt/espressif/esp-idf ]; then
     
     # Usar paths do container
     export IDF_PATH="/opt/espressif/esp-idf"
-    export ESP_MATTER_PATH="/opt/espressif/esp-matter"
     
     # 🔥 Garantir que GN está no PATH
     export PATH="/usr/local/bin:$PATH"
@@ -33,19 +32,13 @@ if [ -f /.dockerenv ] || [ -d /opt/espressif/esp-idf ]; then
         echo "📦 Carregando ESP-IDF do container..."
         source "$IDF_PATH/export.sh" 2>/dev/null
     fi
-    
-    # Carregar Matter
-    if [ -f "$ESP_MATTER_PATH/export.sh" ]; then
-        echo "📦 Carregando ESP-Matter..."
-        source "$ESP_MATTER_PATH/export.sh" 2>/dev/null
-    fi
-    
+
 else
     echo -e "${YELLOW}⚠️  Ambiente HOST detectado${NC}"
     
     # Configurar para ambiente host (fora do container)
-    export IDF_PATH="${HOME}/tools/esp-idf"
-    export ESP_MATTER_PATH="${HOME}/tools/esp-matter"
+    export IDF_PATH="${HOME}/.espressif/v5.5.4/esp-idf"
+    export RMAKER_PATH="${HOME}/esp/esp-rainmaker"
     
     if [ -f "$IDF_PATH/export.sh" ]; then
         echo "📦 Carregando ESP-IDF do host..."
@@ -71,7 +64,6 @@ fi
 if command -v idf.py &> /dev/null; then
     echo -e "${GREEN}✅ Ambiente pronto!${NC}"
     echo "   IDF_PATH: $IDF_PATH"
-    echo "   ESP_MATTER_PATH: $ESP_MATTER_PATH"
     echo "   Versão IDF: $(idf.py --version 2>/dev/null | head -1)"
     echo "   GN: $(gn --version 2>/dev/null | head -1)"
     echo "   Ninja: $(ninja --version 2>/dev/null | head -1)"

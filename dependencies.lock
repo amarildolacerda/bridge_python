@@ -137,6 +137,6 @@ direct_dependencies:
 - espressif/qrcode
 - espressif/rmaker_common
 - idf
-manifest_hash: dc013224c02ce2b386e75df9fa2ca09287121cc779668b95c29655743373e235
+manifest_hash: 517bd80e9dc6ebf57a5ed32fa09a986bc83bc2a4f41c493073567fb1f7323e9d
 target: esp32
 version: 2.0.0
