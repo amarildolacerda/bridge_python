@@ -1,19 +1,32 @@
-* observações
-1. O comando `echo` é usado para imprimir texto na saída padrão (geralmente o terminal).
-2. nao executa build automaticamente, apenas imprime a mensagem "build" no terminal.
-3. se for fazer build, usar cached para evitar recompilar tudo do zero, o que pode economizar tempo e recursos.
-4. O comando `echo` é útil para depuração e para fornecer feedback ao usuário durante
-5. html deve ficar na pasta public, para ser servido corretamente pelo servidor web.
-6. os codigos devem ter classes e arquivos dedicados por finalidade
-7. Ponteiros `const char*` para memória interna do cJSON viram dangling após `cJSON_Delete()`. Copiar com `strncpy` para buffer local antes de deletar.
-8. Service name UDP discovery (`"esp-bridge"`) precisa ser idêntico no cliente e no gateway, senão o discovery nunca responde.
-9. Cliente deve ter retry de registro no `loop()`, não apenas uma chamada no `setup()`.
-10. `httpd_accept_conn: error in accept (23)` = `ENFILE` — limite de sockets. Aumentar `CONFIG_LWIP_MAX_SOCKETS` no `sdkconfig` e configurar `max_open_sockets`, `keep_alive_enable`, `lru_purge_enable` no HTTP server.
-11. `PROP_FLAG_READ` como flag de params RainMaker para sensores (só leitura).
-12. Para enviar temperatura+umidade juntos no RainMaker, o device `TEMPERATURE_SENSOR` precisa criar manualmente o param `"Humidity"` extra, pois o `esp_rmaker_temp_sensor_device_create` padrão só cria `Temperature`.
-13. Separar heartbeat (alive, sem MQTT) de dados (só envia HTTP quando o valor muda) para economizar orçamento MQTT do RainMaker e evitar `Out of MQTT Budget`.
-14. Usar NVS (`nvs_set_blob`/`nvs_get_blob`) para persistir lista de devices bridged, restaurando no boot para evitar rediscovery na Alexa após reboot.
-15. o identificar do serviço de troca de mensagem entre clients e bridge é " esp-bridge"
-```sh
+# ESP32 Bridge + ESP8266 Clients — Projeto
 
-```
+## Branches
+- `main` — estável, usado nos dispositivos em produção
+- `dev` — desenvolvimento
+- `main-v0.0.3` — backup do main anterior (antes do reset para dev)
+
+## Build
+1. `source config.sh` carrega IDF v5.5.4 + RMAKER_PATH
+2. `idf.py build` compila bridge ESP32 (usa ccache automaticamente)
+3. Clientes ESP8266: compilar separadamente (Arduino IDE / PlatformIO)
+
+## Scripts
+- `build.sh` — só build
+- `flash.sh` — source + build + flash em `/dev/ttyUSB0`
+- `monitor.sh` — source + monitor (saída: `Ctrl+]`)
+- `erase.sh` — source + erase-flash
+
+## Arquitetura
+- Bridge (ESP32/IDF): servidor HTTP REST + RainMaker + discovery UDP
+- Clients (ESP8266/Arduino): sensores/atuadores que se registram no bridge via HTTP
+- Discovery UDP: broadcast porta 5000, service name `"esp-bridge"`
+
+## Regras importantes
+1. Device ID é dinâmico (`esp8266_<chip_id>`), não configurável
+2. Device name configurável via WiFiManager, salvo em EEPROM com validação (> 32, < 127)
+3. BRIDGE_HOST = "0.0.0.0" força discovery UDP (sem fallback fixo)
+4. Sempre copiar cJSON `valuestring` para buffer local com `strncpy` antes de `cJSON_Delete`
+5. Retry de registro no `loop()`, não só no `setup()`
+6. `CONFIG_LWIP_MAX_SOCKETS` precisa ser aumentado se aparecer `ENFILE`
+7. Persistir devices bridgeados em NVS para restaurar no boot
+8. Clients enviam `bridge_connected` no `/api/state`

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": [
+    {
+      "name": "esp32-bridge",
+      "description": "ESP32 Bridge + ESP8266 Clients — build, flash, debugging UDP discovery, RainMaker, and device registration",
+      "location": ".opencode/skills/esp32-bridge.md"
+    }
+  ]
+}
