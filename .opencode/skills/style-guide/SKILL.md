@@ -1,3 +1,11 @@
+---
+name: style-guide
+description: >-
+  ESP32 Bridge Dashboard Style Guide — Use when styling the bridge web dashboard
+  or inline ESP8266 client pages. Covers CSS variables, cards, badges, buttons,
+  layout, and responsive design.
+---
+
 # ESP32 Bridge — Style Guide (Dashboard Web)
 
 ## Paleta de Cores (CSS Variables)

@@ -1,3 +1,10 @@
+---
+name: esp32-bridge
+description: >-
+  ESP32 Bridge + ESP8266 Clients — Use when building, flashing, or debugging the
+  bridge firmware, UDP discovery, RainMaker gateway, or device registration.
+---
+
 # ESP32 Bridge + ESP8266 Clients
 
 ## Project Structure
@@ -60,4 +67,4 @@
 - `main-v0.0.3` — backup do main anterior
 
 ## Style Guide
-Ver `.opencode/skills/style-guide.md` — design system do dashboard bridge (CSS variables, cards, badges, botões) e páginas inline dos clients ESP8266 (on/off, sensor).
+Ver `.opencode/skills/style-guide/SKILL.md` — design system do dashboard bridge (CSS variables, cards, badges, botões) e páginas inline dos clients ESP8266 (on/off, sensor).
