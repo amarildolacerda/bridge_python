@@ -33,14 +33,31 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 
 ## Scripts
 - `build.sh` — só build
-- `flash.sh` — source + build + flash em `/dev/ttyUSB0`
+- `flash.sh [-p <port>]` — source + build + flash (porta padrão `/dev/ttyUSB0`)
 - `monitor.sh` — source + monitor (saída: `Ctrl+]`)
+- `monitor.py` — monitor serial Python, sai com `q` ou `Ctrl+C`
 - `erase.sh` — source + erase-flash
 
 ## Arquitetura
-- Bridge (ESP32/IDF): servidor HTTP REST + RainMaker + discovery UDP
+- Bridge (ESP32/IDF): servidor HTTP REST + RainMaker + discovery UDP + terminal serial + WiFi config portal
 - Clients (ESP8266/Arduino): sensores/atuadores que se registram no bridge via HTTP
 - Discovery UDP: broadcast porta 5000, service name `"esp-bridge"`
+
+## Terminal do Bridge (console serial)
+- `l` — lista devices registrados (com índices numéricos)
+- `s` — status do bridge (IP, total devices, uptime)
+- `d <id|índice>` — detalhes de um device (aceita ID ou número da lista `l`)
+- `b` — broadcast ping (envia `ping:true` via UDP, espera 3s, mostra descobertos + registrados)
+- `r` — restart
+- `h` / `?` — ajuda
+- Usa `getchar()` single-key, prompt `bridge>` só aparece após comando executado
+
+## Provisionamento WiFi
+- Bridge usa **SoftAP** (não BLE): quando não há credenciais STA salvas, inicia AP `Bridge_Config` e servidor HTTP em `192.168.4.1`
+- Página web permite digitar SSID/senha e salva via `esp_wifi_set_config()`, então reinicia
+- Após reinício, RainMaker normal usa as credenciais salvas
+- `app_wifi_config.h`/`.cpp` — módulo dedicado (AP + HTTP server + web form)
+- `app_main.cpp` — verifica `esp_wifi_get_config(WIFI_IF_STA)` após `app_network_init()`
 
 ## Desenvolvimento
 - Alterações de código devem ser feitas apenas no branch `dev`. Verifique com `git branch --show-current` antes de começar.
@@ -55,3 +72,9 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 6. `CONFIG_LWIP_MAX_SOCKETS` precisa ser aumentado se aparecer `ENFILE`
 7. Persistir devices bridgeados em NVS para restaurar no boot
 8. Clients enviam `bridge_connected` no `/api/state`
+9. DHT21 client: GPIO 5, tipo DHT21, fallback `isnan()` não envia ao bridge (flag `s_dht_valid`)
+10. Clients respondem a `ping:true` no UDP enviando `{"discover":true,"id":"..."}` de volta
+11. Bridge broadcast (`b`): envia `ping:true` via UDP, mostra IPs descobertos + devices registrados
+12. Dashboard web tem card QR code do RainMaker em `/api/qrcode`
+13. economizar tokens com respostas minimas sem explicações desnecessaria 
+14. manter skills enxutas
