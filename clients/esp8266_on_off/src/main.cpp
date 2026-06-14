@@ -335,6 +335,20 @@ static void maintain_bridge_discovery(void)
                         Serial.printf("[%s] Bridge discovered: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
                     }
                 }
+                bool is_ping = doc["ping"] | false;
+                if (is_ping)
+                {
+                    JsonDocument resp;
+                    resp["service"] = "esp-bridge";
+                    resp["discover"] = true;
+                    resp["id"] = s_device_id;
+                    String payload;
+                    serializeJson(resp, payload);
+                    s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
+                    s_udp.write((const uint8_t *)payload.c_str(), payload.length());
+                    s_udp.endPacket();
+                    Serial.printf("[%s] Ping response sent\n", TAG);
+                }
             }
         }
     }
@@ -678,6 +692,13 @@ static void handle_serial(void)
         Serial.printf("---------------\n\n");
         break;
     }
+    case 'r':
+    case 'R':
+        Serial.printf("\n--- Restart ---\n");
+        Serial.printf("  Reiniciando...\n");
+        delay(500);
+        ESP.restart();
+        break;
     case 'h':
     case 'H':
     case '?':
@@ -686,6 +707,7 @@ static void handle_serial(void)
         Serial.printf("  f    - desligar relay\n");
         Serial.printf("  t    - toggle relay\n");
         Serial.printf("  s    - status do dispositivo\n");
+        Serial.printf("  r    - restart\n");
         Serial.printf("  h/?  - esta ajuda\n");
         Serial.printf("  Browser: http://%s\n", WiFi.localIP().toString().c_str());
         if (s_bridge_discovered)

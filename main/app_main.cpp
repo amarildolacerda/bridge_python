@@ -11,6 +11,7 @@
 #include "app_device_registry.h"
 #include "app_rmaker_gateway.h"
 #include "app_wifi_server.h"
+#include "app_console.h"
 
 static const char *TAG = "app_main";
 
@@ -103,6 +104,8 @@ extern "C" void app_main()
     }
 
     ESP_ERROR_CHECK(wifi_server_start());
+
+    ESP_ERROR_CHECK(console_init());
 
     ESP_LOGI(TAG, "ESP RainMaker Gateway started");
 }

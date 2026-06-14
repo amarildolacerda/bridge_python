@@ -43,15 +43,7 @@ static httpd_handle_t s_ws_hd = NULL;
 static char s_bridge_ip[16] = "0.0.0.0";
 
 // UDP discovery IP cache
-#define MAX_DISCOVERED_IPS 8
 #define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL)
-
-typedef struct
-{
-    char id[MAX_DEVICE_ID_LEN];
-    char ip[16];
-    int64_t last_seen_us;
-} discovered_ip_t;
 
 static discovered_ip_t s_discovered_ips[MAX_DISCOVERED_IPS];
 
@@ -195,7 +187,7 @@ static void send_udp_broadcast(void)
     char resp[256];
     uint64_t uptime_s = esp_timer_get_time() / 1000000;
     snprintf(resp, sizeof(resp),
-             "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu}",
+             "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu,\"ping\":true}",
              s_bridge_ip, uptime_s);
 
     struct sockaddr_in bcast_addr;
@@ -1007,6 +999,28 @@ static esp_err_t qrcode_handler(httpd_req_t *req)
     cJSON_Delete(resp);
 
     return ESP_OK;
+}
+
+void wifi_server_broadcast(void)
+{
+    send_udp_broadcast();
+    ESP_LOGI(TAG, "Manual UDP broadcast sent");
+}
+
+int wifi_server_get_discovered_ips(discovered_ip_t *ips, int max)
+{
+    int count = 0;
+    int64_t now = esp_timer_get_time();
+    for (int i = 0; i < MAX_DISCOVERED_IPS && count < max; i++)
+    {
+        if (s_discovered_ips[i].id[0] != '\0' &&
+            now - s_discovered_ips[i].last_seen_us < DISCOVERED_IP_TIMEOUT_US)
+        {
+            memcpy(&ips[count], &s_discovered_ips[i], sizeof(discovered_ip_t));
+            count++;
+        }
+    }
+    return count;
 }
 
 esp_err_t wifi_server_start(void)
