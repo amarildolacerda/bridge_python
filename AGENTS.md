@@ -5,9 +5,30 @@
 - `dev` — desenvolvimento
 - `main-v0.0.3` — backup do main anterior (antes do reset para dev)
 
+## Ambiente
+
+### Pré-requisitos
+- `sudo apt install ccache git curl` — ccache acelera rebuilds
+- Python 3.10+ com `venv`
+
+### ESP-IDF (primeira instalação)
+```sh
+mkdir -p ~/.espressif/v5.5.4
+git clone --recursive -b v5.5.4 https://github.com/espressif/esp-idf.git ~/.espressif/v5.5.4/esp-idf
+```
+> Se o clone falhar por falta de internet, reconecte a rede e execute:
+> ```sh
+> git -C ~/.espressif/v5.5.4/esp-idf submodule update --init --recursive
+> ```
+
+### RainMaker
+```sh
+git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~/esp/esp-rainmaker
+```
+
 ## Build
-1. `source config.sh` carrega IDF v5.5.4 + RMAKER_PATH
-2. `idf.py build` compila bridge ESP32 (usa ccache automaticamente)
+1. `source config.sh` carrega IDF v5.5.4 + RMAKER_PATH (ativa ccache automaticamente)
+2. `idf.py build` compila bridge ESP32
 3. Clientes ESP8266: compilar separadamente (Arduino IDE / PlatformIO)
 
 ## Scripts
