@@ -27,6 +27,12 @@
 <div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div></div>
 </div>
 <div class="card">
+<h2>QR Code <span style="color:#7A8BA3;font-weight:400">(RainMaker)</span></h2>
+<div id="qrcode-card">
+<div class="empty">carregando...</div>
+</div>
+</div>
+<div class="card">
 <h2>Dispositivos <span id="dev-count" style="color:#7A8BA3;font-weight:400"></span></h2>
 <div id="devices"><div class="empty">carregando...</div></div>
 </div>
@@ -47,6 +53,20 @@ document.getElementById('metric-ip').textContent=b.ip;
 document.getElementById('metric-uptime').textContent=uptime;
 document.getElementById('metric-heap').textContent=(b.free_heap/1024).toFixed(0)+' KB';
 }catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:#C62828">Erro de conexão</span></div>'}
+
+try{
+let r=await fetch('/api/qrcode');
+let q=await r.json();
+let qrEl=document.getElementById('qrcode-card');
+if(q.qr){
+let img='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(q.qr);
+qrEl.innerHTML='<div style="text-align:center;padding:8px 0">'+
+'<img src="'+img+'" alt="QR Code" style="width:200px;height:200px;border-radius:8px" loading="lazy" onerror="this.style.display=\'none\'">'+
+'<div style="margin-top:8px;font-size:.75rem;color:#8FA0B8;word-break:break-all;font-family:monospace">'+q.qr+'</div>'+
+'<div style="margin-top:4px;font-size:.7rem;color:#B2CEfE">Copie o texto acima e gere o QR em qrserver.com</div>'+
+'</div>';
+}else{qrEl.innerHTML='<div class="empty">QR indisponivel</div>'}
+}catch(e){document.getElementById('qrcode-card').innerHTML='<div class="empty">QR indisponivel</div>'}
 
 try{
 let r=await fetch('/api/devices');

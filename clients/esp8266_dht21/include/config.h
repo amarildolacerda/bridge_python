@@ -27,9 +27,6 @@
 #define BUTTON_PIN 5
 #endif
 
-#if DEVICE_TYPE == DEVICE_TYPE_TEMPERATURE
 #define DHT_PIN 4
-#define DHT_TYPE DHT11
-#endif
-
+#define DHT_TYPE DHT21
 #define LED_PIN 2

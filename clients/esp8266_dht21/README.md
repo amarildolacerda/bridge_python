@@ -1,10 +1,11 @@
 # ESP8266 DHT11 Bridge Client
 
-Cliente ESP8266 com sensor DHT11 para o [ESP RainMaker Gateway Bridge](https://github.com/amarildolacerda/bridge). Envia temperatura e umidade para o gateway via HTTP REST.
+Cliente ESP8266 com sensor DHT11 para o gateway bridge. Envia temperatura e umidade para o gateway via HTTP REST.
 
 ## Funcionalidades
 
 - Leitura de temperatura e umidade (DHT11)
+- Comandos via terminal serial (pressione 'h' para ajuda)
 - Descoberta automática do gateway via UDP
 - Registro HTTP no gateway
 - Envio periódico de telemetria
@@ -16,7 +17,7 @@ Cliente ESP8266 com sensor DHT11 para o [ESP RainMaker Gateway Bridge](https://g
 
 | Componente | GPIO |
 |------------|------|
-| DHT11 | 4 |
+| DHT11 | 5 (D1) |
 | LED | 2 |
 
 ## Configuração

@@ -10,7 +10,7 @@ description: >-
 ## Project Structure
 - `main/` — ESP32 bridge firmware (IDF v5.5.4, RainMaker)
 - `clients/esp8266_on_off/` — ESP8266 on/off client (Arduino)
-- `clients/esp8266_dh11/` — ESP8266 temperature/humidity client
+- `clients/esp8266_dht11/` — ESP8266 temperature/humidity client
 - `clients/esp8266_tanque/` — ESP8266 water tank level client
 
 ## Build & Flash

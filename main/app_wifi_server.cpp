@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <esp_system.h>
 #include "mdns.h"
+#include <app_network.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -962,6 +963,52 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t qrcode_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    cJSON *resp = cJSON_CreateObject();
+
+    char *service_name = app_network_get_device_service_name();
+    char *pop = app_network_get_device_pop_default();
+
+    cJSON_AddStringToObject(resp, "service_name", service_name ? service_name : "");
+    cJSON_AddStringToObject(resp, "pop", pop ? pop : "");
+#ifdef CONFIG_APP_NETWORK_PROV_TRANSPORT_BLE
+    const char *transport = "ble";
+#else
+    const char *transport = "softap";
+#endif
+    cJSON_AddStringToObject(resp, "transport", transport);
+    cJSON_AddStringToObject(resp, "ver", "v1");
+
+    char qr_payload[256];
+    if (pop)
+    {
+        snprintf(qr_payload, sizeof(qr_payload),
+                 "{\"ver\":\"v1\",\"name\":\"%s\",\"pop\":\"%s\",\"transport\":\"%s\"}",
+                 service_name ? service_name : "", pop, transport);
+    }
+    else
+    {
+        snprintf(qr_payload, sizeof(qr_payload),
+                 "{\"ver\":\"v1\",\"name\":\"%s\",\"transport\":\"%s\"}",
+                 service_name ? service_name : "", transport);
+    }
+    cJSON_AddStringToObject(resp, "qr", qr_payload);
+
+    free(service_name);
+    free(pop);
+
+    const char *resp_str = cJSON_Print(resp);
+    httpd_resp_sendstr(req, resp_str);
+    free((void *)resp_str);
+    cJSON_Delete(resp);
+
+    return ESP_OK;
+}
+
 esp_err_t wifi_server_start(void)
 {
     if (s_server)
@@ -1061,6 +1108,13 @@ esp_err_t wifi_server_start(void)
         .handler = reset_handler,
         .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &reset_uri);
+
+    httpd_uri_t qrcode_uri = {
+        .uri = "/api/qrcode",
+        .method = HTTP_GET,
+        .handler = qrcode_handler,
+        .user_ctx = NULL};
+    httpd_register_uri_handler(s_server, &qrcode_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",
