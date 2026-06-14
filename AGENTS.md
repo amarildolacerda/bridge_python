@@ -42,6 +42,10 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 - Clients (ESP8266/Arduino): sensores/atuadores que se registram no bridge via HTTP
 - Discovery UDP: broadcast porta 5000, service name `"esp-bridge"`
 
+## Desenvolvimento
+- Alterações de código devem ser feitas apenas no branch `dev`. Verifique com `git branch --show-current` antes de começar.
+- `main` é estável e usado em produção — nunca commitar diretamente em `main`.
+
 ## Regras importantes
 1. Device ID é dinâmico (`esp8266_<chip_id>`), não configurável
 2. Device name configurável via WiFiManager, salvo em EEPROM com validação (> 32, < 127)
