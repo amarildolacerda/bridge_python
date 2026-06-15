@@ -4,6 +4,7 @@
 - `main` — estável, usado nos dispositivos em produção
 - `dev` — desenvolvimento
 - `main-v0.0.3` — backup do main anterior (antes do reset para dev)
+- antes de passar o dev para main gerar um branch do main_vx.x.x
 
 ## Ambiente
 
