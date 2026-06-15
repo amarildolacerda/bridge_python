@@ -8,12 +8,9 @@
 
 #include <app_network.h>
 
-#include <esp_wifi.h>
-
 #include "app_device_registry.h"
 #include "app_rmaker_gateway.h"
 #include "app_wifi_server.h"
-#include "app_wifi_config.h"
 #include "app_console.h"
 
 static const char *TAG = "app_main";
@@ -65,29 +62,13 @@ extern "C" void app_main()
 
     app_network_init();
 
-    {
-        bool provisioned = false;
-        wifi_config_t wifi_cfg;
-        if (esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK &&
-            strlen((const char *)wifi_cfg.sta.ssid) > 0) {
-            provisioned = true;
-        }
-
-        if (!provisioned) {
-            ESP_LOGI(TAG, "No WiFi credentials found. Starting config portal...");
-            ESP_ERROR_CHECK(wifi_config_portal_start());
-            ESP_LOGI(TAG, "Config portal running. Connect to \"%s\" and open http://192.168.4.1",
-                     "Bridge_Config");
-            while (1) {
-                vTaskDelay(pdMS_TO_TICKS(60000));
-            }
-        }
-    }
-
     ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(APP_NETWORK_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
     ESP_ERROR_CHECK(rmaker_gateway_init());
+    esp_rmaker_start();
+
+    ESP_ERROR_CHECK(app_network_start(POP_TYPE_NONE));
 
     int loaded = device_registry_get_loaded_count();
     if (loaded > 0) {
@@ -104,15 +85,6 @@ extern "C" void app_main()
                 }
             }
         }
-    }
-
-    esp_rmaker_start();
-
-    err = app_network_start(POP_TYPE_RANDOM);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Could not start WiFi. Aborting!!!");
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
-        abort();
     }
 
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");

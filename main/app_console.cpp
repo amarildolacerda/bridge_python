@@ -95,6 +95,7 @@ static void cmd_detail(void)
             break;
         }
         if (pos < (int)sizeof(id) - 1) {
+            putchar(c);
             id[pos++] = c;
         }
     }

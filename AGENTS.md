@@ -39,7 +39,7 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 - `erase.sh` — source + erase-flash
 
 ## Arquitetura
-- Bridge (ESP32/IDF): servidor HTTP REST + RainMaker + discovery UDP + terminal serial + WiFi config portal
+- Bridge (ESP32/IDF): servidor HTTP REST + RainMaker + discovery UDP + terminal serial
 - Clients (ESP8266/Arduino): sensores/atuadores que se registram no bridge via HTTP
 - Discovery UDP: broadcast porta 5000, service name `"esp-bridge"`
 
@@ -53,15 +53,22 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 - Usa `getchar()` single-key, prompt `bridge>` só aparece após comando executado
 
 ## Provisionamento WiFi
-- Bridge usa **SoftAP** (não BLE): quando não há credenciais STA salvas, inicia AP `Bridge_Config` e servidor HTTP em `192.168.4.1`
-- Página web permite digitar SSID/senha e salva via `esp_wifi_set_config()`, então reinicia
-- Após reinício, RainMaker normal usa as credenciais salvas
-- `app_wifi_config.h`/`.cpp` — módulo dedicado (AP + HTTP server + web form)
-- `app_main.cpp` — verifica `esp_wifi_get_config(WIFI_IF_STA)` após `app_network_init()`
+- Bridge usa **BLE** (não SoftAP): quando não há credenciais STA salvas, inicia BLE advertising `PROV_<nome>`
+- Provisionamento feito via app ESP RainMaker (escaneia QR code ou conecta via BLE)
+- POP_TYPE_NONE + Security v1 — sem PIN, app conecta direto
+- QR code gerado com `app_network_get_device_service_name()` + `app_network_get_device_pop(POP_TYPE_RANDOM)` no dashboard em `/api/qrcode`
+- Após provisionamento via BLE, bridge conecta ao WiFi e inicia RainMaker cloud
+- `app_main.cpp` — init: network → event handlers → rmaker_gateway → esp_rmaker_start → app_network_start (BLE, POP_TYPE_NONE)
 
 ## Desenvolvimento
 - Alterações de código devem ser feitas apenas no branch `dev`. Verifique com `git branch --show-current` antes de começar.
 - `main` é estável e usado em produção — nunca commitar diretamente em `main`.
+### Novos Clients
+1. sempre ter um README.md para orientar as conexões de hardwares/pinos e demais informações releventes ao cliente
+2. ter um dashboard pertinent 
+3. se possivel ter configuração WIFI com WiFiManager
+4. ter atalhos de teclados no terminal
+5. seguir API do gateway
 
 ## Regras importantes
 1. Device ID é dinâmico (`esp8266_<chip_id>`), não configurável
@@ -76,5 +83,9 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 10. Clients respondem a `ping:true` no UDP enviando `{"discover":true,"id":"..."}` de volta
 11. Bridge broadcast (`b`): envia `ping:true` via UDP, mostra IPs descobertos + devices registrados
 12. Dashboard web tem card QR code do RainMaker em `/api/qrcode`
-13. economizar tokens com respostas minimas sem explicações desnecessaria 
-14. manter skills enxutas
+
+## Regras de AI
+0. economizar tokens com respostas minimas sem explicações desnecessaria 
+1. manter skills enxutas
+2. economizar tokens simplificando com a comunição
+3. manter uma comunicação objetiva sem rodeios
