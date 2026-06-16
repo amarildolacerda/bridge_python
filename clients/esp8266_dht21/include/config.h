@@ -31,5 +31,5 @@
 #endif
 
 #define DHT_PIN 4
-#define DHT_TYPE DHT21
+#define DHT_TYPE DHT22
 #define LED_PIN 2

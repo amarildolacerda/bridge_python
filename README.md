@@ -17,6 +17,7 @@ Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **E
 | `clients/esp8266_dht21/` | Temperatura/Umidade | ESP8266 + PlatformIO | Sensor DHT21 |
 | `clients/esp8266_tanque/` | Nível d'água | ESP8266 + PlatformIO | Sensor ultrassônico HC-SR04 |
 | `clients/esp8266_gas/` | Detector de gás | ESP8266 + PlatformIO | Sensor MQ-2/5/7/135 |
+| `clients/esp8266_chuva/` | Sensor de chuva | ESP8266 + PlatformIO | Sensor analógico de chuva |
 | `clients/esp32_mqtt/` | Broker MQTT local | ESP32 + PlatformIO | Bridge MQTT standalone |
 
 ## Arquitetura
