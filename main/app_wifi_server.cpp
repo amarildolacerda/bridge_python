@@ -1001,6 +1001,9 @@ static esp_err_t devices_list_handler(httpd_req_t *req)
             cJSON_AddStringToObject(item, "type", device_type_to_string(devices[i].type));
             cJSON_AddBoolToObject(item, "online", devices[i].online);
 
+            int64_t elapsed_s = (esp_timer_get_time() - devices[i].last_seen_us) / 1000000;
+            cJSON_AddNumberToObject(item, "last_seen_elapsed_s", elapsed_s);
+
             const char *state_json = device_registry_get_state_json(devices[i].id);
             if (strcmp(state_json, "{}") != 0)
             {

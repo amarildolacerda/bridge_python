@@ -37,6 +37,7 @@ static uint16_t s_bridge_port = BRIDGE_PORT;
 static bool s_bridge_discovered = false;
 static bool s_bridge_connected = false;
 
+static bool s_pending_register_state = false;
 static bool s_wifi_configuration_mode = false;
 static unsigned long s_wifi_config_start_time = 0;
 
@@ -340,7 +341,7 @@ static void maintain_bridge_discovery(void)
                 {
                     Serial.printf("[%s] Re-register requested by bridge\n", TAG);
                     register_device();
-                    send_state(true);
+                    s_pending_register_state = true;
                 }
             }
         }
@@ -756,7 +757,7 @@ void setup(void)
     if (discover_bridge())
     {
         register_device();
-        send_state(true);
+        s_pending_register_state = true;
     }
     else
     {
@@ -790,8 +791,14 @@ void loop(void)
         if (register_device())
         {
             s_last_state_update = now;
-            send_state(true);
+            s_pending_register_state = true;
         }
+    }
+
+    if (s_pending_register_state)
+    {
+        s_pending_register_state = false;
+        send_state(true);
     }
 
     if (now - s_last_command_poll > COMMAND_POLL_INTERVAL)

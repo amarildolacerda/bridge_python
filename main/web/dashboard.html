@@ -121,10 +121,14 @@ else if('gas_level' in st)stHtml=st.gas_level+'%'+(st.alarm?' <span style="color
 else if('rain_level' in st)stHtml=st.rain_level+'% <span style="color:#1976D2">\u2614 Chuva</span>';
 else stHtml='<span style="color:#7A8BA3">—</span>';
 let ipLink=dev.ip&&dev.ip!='0.0.0.0'?'<a href="http://'+dev.ip+'" target="_blank" style="color:#3498DB;text-decoration:none">'+dev.ip+'</a>':'—';
+let lastSeen='';
+if(dev.last_seen_elapsed_s!=null){let s=dev.last_seen_elapsed_s;
+lastSeen=s<60?s+'s':s<3600?Math.floor(s/60)+'m':s<86400?Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m':Math.floor(s/86400)+'d '+Math.floor((s%86400)/3600)+'h';
+lastSeen='<div class="dev-ts">\u00FAtima coleta: '+lastSeen+'</div>';}
 h+='<div class="device">'+
 '<div class="device-head"><span class="led '+(dev.online?'on':'off')+'"></span><span class="dev-name">'+dev.name+'</span> <span class="badge '+(dev.online?'on':'off')+'">'+(dev.online?'online':'offline')+'</span></div>'+
 '<div class="dev-meta">'+dev.type+' &middot; '+ipLink+'</div>'+
-'<div class="dev-state">'+stHtml+'</div></div>';
+'<div class="dev-state">'+stHtml+'</div>'+lastSeen+'</div>';
 }
 document.getElementById('devices').innerHTML=h||'<div class="empty">Nenhum dispositivo registrado</div>';
 document.getElementById('dev-count').textContent='('+on+'/'+devs.length+' online)';

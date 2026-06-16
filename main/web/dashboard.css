@@ -208,6 +208,13 @@ h1 {
   color: var(--muted);
 }
 
+.dev-ts {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 6px;
+  opacity: 0.75;
+}
+
 .state-on {
   color: var(--success);
   font-weight: 700;

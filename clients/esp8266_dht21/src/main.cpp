@@ -38,6 +38,7 @@ static char s_device_name[48] = DEVICE_NAME;
 static char s_bridge_host[64] = BRIDGE_HOST;
 static uint16_t s_bridge_port = BRIDGE_PORT;
 static bool s_bridge_discovered = false;
+static bool s_pending_register_state = false;
 
 static int s_dht_pin = DHT_PIN;
 static bool s_dht_valid = false;
@@ -70,9 +71,11 @@ static void save_device_name(const char *name)
 {
     EEPROM.begin(128);
     EEPROM.write(EEPROM_NAME_ADDR, 0xFF);
-    for (int i = 0; i < EEPROM_NAME_MAX - 1; i++) {
+    for (int i = 0; i < EEPROM_NAME_MAX - 1; i++)
+    {
         EEPROM.write(EEPROM_NAME_ADDR + 1 + i, name[i]);
-        if (name[i] == '\0') break;
+        if (name[i] == '\0')
+            break;
     }
     EEPROM.write(EEPROM_NAME_ADDR + EEPROM_NAME_MAX, '\0');
     EEPROM.commit();
@@ -81,10 +84,13 @@ static void save_device_name(const char *name)
 
 static bool is_valid_name(const char *s)
 {
-    if (!s || s[0] == '\0') return false;
-    for (int i = 0; s[i]; i++) {
+    if (!s || s[0] == '\0')
+        return false;
+    for (int i = 0; s[i]; i++)
+    {
         char c = s[i];
-        if (c < 32 || c > 126) return false;
+        if (c < 32 || c > 126)
+            return false;
     }
     return true;
 }
@@ -93,14 +99,18 @@ static void load_device_name(void)
 {
     EEPROM.begin(128);
     uint8_t marker = EEPROM.read(EEPROM_NAME_ADDR);
-    if (marker == 0xFF) {
+    if (marker == 0xFF)
+    {
         char buf[EEPROM_NAME_MAX];
-        for (int i = 0; i < EEPROM_NAME_MAX - 1; i++) {
+        for (int i = 0; i < EEPROM_NAME_MAX - 1; i++)
+        {
             buf[i] = EEPROM.read(EEPROM_NAME_ADDR + 1 + i);
-            if (buf[i] == '\0') break;
+            if (buf[i] == '\0')
+                break;
         }
         buf[EEPROM_NAME_MAX - 1] = '\0';
-        if (is_valid_name(buf)) {
+        if (is_valid_name(buf))
+        {
             strncpy(s_device_name, buf, sizeof(s_device_name) - 1);
             s_device_name[sizeof(s_device_name) - 1] = '\0';
         }
@@ -175,9 +185,12 @@ static void send_state(bool force)
     static float last_temp = -999;
     static float last_hum = -999;
     bool changed = false;
-    if (force) {
+    if (force)
+    {
         changed = true;
-    } else {
+    }
+    else
+    {
         if (abs(s_temperature - last_temp) > STATE_SEND_THRESHOLD_TEMP)
             changed = true;
         else if (abs(s_humidity - last_hum) > STATE_SEND_THRESHOLD_HUM)
@@ -200,6 +213,7 @@ static void send_state(bool force)
         last_temp = s_temperature;
         last_hum = s_humidity;
         Serial.printf("[%s] temp=%.1f hum=%.1f (GPIO %d)\n", TAG, s_temperature, s_humidity, s_dht_pin);
+        s_pending_register_state = false;
     }
 }
 
@@ -242,7 +256,7 @@ static void maintain_bridge_discovery(void)
                 {
                     Serial.printf("[%s] Re-register requested by bridge\n", TAG);
                     register_device();
-                    send_state(true);
+                    s_pending_register_state = true;
                 }
             }
         }
@@ -339,7 +353,10 @@ static bool wifi_setup(bool force_config_portal = false)
         Serial.printf("[%s] Connecting to saved WiFi: %s\n", TAG, WiFi.SSID().c_str());
         if (wifiManager.autoConnect())
         {
-            Serial.printf("[%s] WiFi connected! IP: %s\n", TAG, WiFi.localIP().toString().c_str());
+            Serial.printf("[%s] WiFi connected! IP: %s GW: %s DNS: %s\n", TAG,
+                          WiFi.localIP().toString().c_str(),
+                          WiFi.gatewayIP().toString().c_str(),
+                          WiFi.dnsIP().toString().c_str());
             s_wifi_configuration_mode = false;
             return true;
         }
@@ -368,7 +385,8 @@ static bool wifi_setup(bool force_config_portal = false)
             if (s_bridge_port == 0)
                 s_bridge_port = BRIDGE_PORT;
         }
-        if (strlen(custom_dev_name.getValue()) > 0 && strcmp(s_device_name, custom_dev_name.getValue()) != 0) {
+        if (strlen(custom_dev_name.getValue()) > 0 && strcmp(s_device_name, custom_dev_name.getValue()) != 0)
+        {
             strncpy(s_device_name, custom_dev_name.getValue(), sizeof(s_device_name) - 1);
             s_device_name[sizeof(s_device_name) - 1] = '\0';
             save_device_name(s_device_name);
@@ -398,7 +416,10 @@ static void maintain_wifi_connection(void)
     {
         if (WiFi.status() == WL_CONNECTED)
         {
-            Serial.printf("[%s] Reconnected! IP: %s\n", TAG, WiFi.localIP().toString().c_str());
+            Serial.printf("[%s] Reconnected! IP: %s GW: %s DNS: %s\n", TAG,
+                          WiFi.localIP().toString().c_str(),
+                          WiFi.gatewayIP().toString().c_str(),
+                          WiFi.dnsIP().toString().c_str());
             return;
         }
         delay(500);
@@ -427,10 +448,14 @@ static void read_sensors(void)
         s_dht_valid = false;
         s_temperature += (random(-10, 10) / 20.0);
         s_humidity += (random(-20, 20) / 10.0);
-        if (s_temperature < 18.0) s_temperature = 18.0;
-        if (s_temperature > 30.0) s_temperature = 30.0;
-        if (s_humidity < 30.0) s_humidity = 30.0;
-        if (s_humidity > 70.0) s_humidity = 70.0;
+        if (s_temperature < 18.0)
+            s_temperature = 18.0;
+        if (s_temperature > 30.0)
+            s_temperature = 30.0;
+        if (s_humidity < 30.0)
+            s_humidity = 30.0;
+        if (s_humidity > 70.0)
+            s_humidity = 70.0;
     }
     static int counter = 0;
     counter++;
@@ -515,12 +540,12 @@ static void handle_serial(void)
     char c = Serial.read();
     switch (c)
     {
-        case 'R':
-        case 'r':
-         // reset
-         ESP.restart();
+    case 'R':
+    case 'r':
+        // reset
+        ESP.restart();
 
-          break;
+        break;
     case 'l':
     case 'L':
         Serial.printf("\n--- Leitura forçada ---\n");
@@ -556,7 +581,9 @@ static void handle_serial(void)
             Serial.printf("  Bridge:  http://%s:%d\n", s_bridge_host, s_bridge_port);
         Serial.printf("  OTA:     curl -F firmware=@firmware.bin http://%s/api/ota\n", WiFi.localIP().toString().c_str());
         Serial.printf("  DHT21:   GPIO %d\n", s_dht_pin);
-        Serial.printf("  IP local: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("  IP:       %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("  Gateway:  %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("  DNS:      %s\n", WiFi.dnsIP().toString().c_str());
         Serial.printf("  RSSI:     %d dBm\n", WiFi.RSSI());
         Serial.printf("  Up:       %lu s\n", (millis() - s_start_time) / 1000);
         Serial.printf("----------------\n\n");
@@ -575,7 +602,9 @@ static void handle_serial(void)
         Serial.printf("  DHT21:       GPIO %d\n", s_dht_pin);
         Serial.printf("  Bridge:      %s:%d (%s)\n", s_bridge_host, s_bridge_port,
                       s_bridge_connected ? "conectado" : "desconectado");
-        Serial.printf("  Browser:     http://%s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("  IP:          %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("  Gateway:     %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("  DNS:         %s\n", WiFi.dnsIP().toString().c_str());
         Serial.printf("  RSSI:        %d dBm\n", WiFi.RSSI());
         Serial.printf("  Uptime:      %lu s\n", up);
         Serial.printf("---------------\n\n");
@@ -689,7 +718,7 @@ void setup(void)
     if (discover_bridge())
     {
         register_device();
-        send_state(true);
+        s_pending_register_state = true;
     }
     else
     {
@@ -724,8 +753,16 @@ void loop(void)
         if (register_device())
         {
             s_last_state_update = now;
-            send_state(true);
+            s_pending_register_state = true;
         }
+    }
+
+    if (s_pending_register_state)
+    {
+        s_pending_register_state = false;
+        s_last_state_update = now;
+        read_sensors();
+        send_state(true);
     }
 
     if (now - s_last_telemetry_update > TELEMETRY_INTERVAL)
@@ -738,15 +775,14 @@ void loop(void)
     if (now - s_last_state_update > STATE_UPDATE_INTERVAL)
     {
         s_last_state_update = now;
-        read_sensors();
-        send_state(false);
+        s_pending_register_state = true;
     }
 
     static unsigned long s_last_force_send = 0;
     if (now - s_last_force_send > STATE_FORCE_INTERVAL)
     {
         s_last_force_send = now;
-        send_state(true);
+        s_pending_register_state = true;
     }
 
 #ifdef LED_PIN
