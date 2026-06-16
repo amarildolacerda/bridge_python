@@ -52,14 +52,43 @@ def main():
     if args.ws:
         ws = create_connection(ws_url, timeout=5)
         print(f"WebSocket conectado em {args.host}/ws")
+        print("-" * 90)
         try:
+            prev_states = {}
+            ws.settimeout(10)
             while True:
-                data = ws.recv()
+                try:
+                    data = ws.recv()
+                except TimeoutError:
+                    continue
                 parsed = json.loads(data)
                 ts = datetime.now().strftime("%H:%M:%S")
-                uptime = parsed.get("uptime_s", 0)
-                heap = parsed.get("free_heap", 0)
-                print(f"  [{ts}] bridge | uptime={uptime}s heap={heap}B")
+                msg_type = parsed.get("t", "")
+                if msg_type == "device_update":
+                    did = parsed.get("id", "")
+                    name = parsed.get("name", did)
+                    typ = parsed.get("type", "?")
+                    online = "ON" if parsed.get("online") else "OFF"
+                    state = parsed.get("state", {})
+                    state_str = ", ".join(f"{k}={v}" for k, v in state.items()) if state else "-"
+                    changed = prev_states.get(did) != state_str
+                    prev_states[did] = state_str
+                    marker = "*" if changed else " "
+                    print(f" [{ts}]{marker} {name:20s}  type={typ:12s}  {online}  state={state_str}")
+                elif msg_type == "devices":
+                    count = parsed.get("device_count", 0)
+                    print(f" [{ts}] --- {count} dispositivo(s) ---")
+                    for d in parsed.get("devices", []):
+                        did = d.get("id", "")
+                        name = d.get("name", did)
+                        typ = d.get("type", "?")
+                        online = "ON" if d.get("online") else "OFF"
+                        ip = d.get("ip", "?")
+                        state = d.get("state", {})
+                        state_str = ", ".join(f"{k}={v}" for k, v in state.items()) if state else "-"
+                        print(f"        {name:20s}  type={typ:12s}  {online}  ip={ip:15s}  {state_str}")
+                else:
+                    print(f" [{ts}] bridge | {parsed}")
                 sys.stdout.flush()
         except KeyboardInterrupt:
             ws.close()

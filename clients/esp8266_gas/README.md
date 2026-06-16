@@ -54,6 +54,26 @@ Edite `include/config.h`:
 | MQ-7   | Monóxido de carbono (CO)   |
 | MQ-135 | Qualidade do ar, CO2, fumaca |
 
+## OTA (Over-The-Air)
+
+O suporte OTA usa `ArduinoOTA` (biblioteca nativa do core ESP8266).
+
+Após conectar no WiFi, o dispositivo fica acessível via `{device_id}.local` (ex: `esp8266_xxxxxx.local`).
+
+### Enviar firmware via OTA
+
+```bash
+# PlatformIO
+pio run -t upload --upload-port esp8266_xxxxxx.local
+
+# espota.py (vem com ESP8266 core)
+espota.py -i esp8266_xxxxxx.local -p 8266 -f .pio/build/esp8266/firmware.bin
+```
+
+### Atalho serial
+
+- `u` — exibe info OTA (hostname, porta, comandos)
+
 ## API bridge
 
 Tipo registrado: `"gas"`
@@ -82,6 +102,7 @@ pio device monitor
 - `l` — ler sensor agora
 - `s` — status do dispositivo
 - `r` — restart
+- `u` — info OTA
 - `h/?` — ajuda
 
 ## Dependências (PlatformIO)

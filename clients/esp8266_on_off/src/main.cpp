@@ -335,19 +335,12 @@ static void maintain_bridge_discovery(void)
                         Serial.printf("[%s] Bridge discovered: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
                     }
                 }
-                bool is_ping = doc["ping"] | false;
-                if (is_ping)
+                bool re_reg = doc["re_register"] | false;
+                if (re_reg)
                 {
-                    JsonDocument resp;
-                    resp["service"] = "esp-bridge";
-                    resp["discover"] = true;
-                    resp["id"] = s_device_id;
-                    String payload;
-                    serializeJson(resp, payload);
-                    s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
-                    s_udp.write((const uint8_t *)payload.c_str(), payload.length());
-                    s_udp.endPacket();
-                    Serial.printf("[%s] Ping response sent\n", TAG);
+                    Serial.printf("[%s] Re-register requested by bridge\n", TAG);
+                    register_device();
+                    send_state(true);
                 }
             }
         }

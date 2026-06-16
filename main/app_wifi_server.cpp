@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
 #include "mdns.h"
 #include <app_network.h>
 #include <freertos/FreeRTOS.h>
@@ -41,6 +42,8 @@ static int s_ws_fd = -1;
 static httpd_handle_t s_ws_hd = NULL;
 
 static char s_bridge_ip[16] = "0.0.0.0";
+
+static void ws_push_device_update(const char *id);
 
 // UDP discovery IP cache
 #define DISCOVERED_IP_TIMEOUT_US (300 * 1000000LL)
@@ -187,7 +190,7 @@ static void send_udp_broadcast(void)
     char resp[256];
     uint64_t uptime_s = esp_timer_get_time() / 1000000;
     snprintf(resp, sizeof(resp),
-             "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu,\"ping\":true}",
+             "{\"service\":\"esp-bridge\",\"ip_sta\":\"%s\",\"http_port\":80,\"uptime_s\":%llu,\"re_register\":true}",
              s_bridge_ip, uptime_s);
 
     struct sockaddr_in bcast_addr;
@@ -604,6 +607,8 @@ static esp_err_t device_state_handler(httpd_req_t *req)
         rmaker_gateway_device_update_state(id, key, value);
     }
 
+    ws_push_device_update(id);
+
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", "ok");
@@ -791,7 +796,9 @@ static esp_err_t device_heartbeat_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    device_registry_mark_seen(id_item->valuestring);
+    const char *id = id_item->valuestring;
+    device_registry_mark_seen(id);
+    ws_push_device_update(id);
     cJSON_Delete(root);
 
     httpd_resp_set_type(req, "application/json");
@@ -814,6 +821,15 @@ static esp_err_t reset_handler(httpd_req_t *req)
     fflush(stdout);
     vTaskDelay(pdMS_TO_TICKS(500));
     esp_restart();
+    return ESP_OK;
+}
+
+static esp_err_t broadcast_handler(httpd_req_t *req)
+{
+    wifi_server_broadcast();
+    ESP_LOGI(TAG, "Broadcast requested via API");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"broadcast sent\"}");
     return ESP_OK;
 }
 
@@ -840,13 +856,44 @@ static esp_err_t ws_handler(httpd_req_t *req)
     return ret;
 }
 
+static void ws_push_device_update(const char *id)
+{
+    if (s_ws_fd < 0 || !s_ws_hd)
+        return;
+    bridged_device_t *dev = device_registry_get_by_id(id);
+    if (!dev || !dev->registered)
+        return;
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "t", "device_update");
+    cJSON_AddStringToObject(resp, "id", dev->id);
+    cJSON_AddStringToObject(resp, "name", dev->name);
+    cJSON_AddStringToObject(resp, "type", device_type_to_string(dev->type));
+    cJSON_AddBoolToObject(resp, "online", dev->online);
+    const char *state_json = device_registry_get_state_json(dev->id);
+    if (strcmp(state_json, "{}") != 0)
+    {
+        cJSON *state = cJSON_Parse(state_json);
+        if (state)
+            cJSON_AddItemToObject(resp, "state", state);
+    }
+    const char *payload = cJSON_Print(resp);
+    httpd_ws_frame_t frame = {
+        .type = HTTPD_WS_TYPE_TEXT,
+        .payload = (uint8_t *)payload,
+        .len = (size_t)strlen(payload)};
+    httpd_ws_send_frame_async(s_ws_hd, s_ws_fd, &frame);
+    free((void *)payload);
+    cJSON_Delete(resp);
+}
+
 static void ws_monitor_task(void *pv)
 {
     while (1)
     {
         if (s_ws_fd >= 0 && s_ws_hd)
         {
-            if (httpd_ws_get_fd_info(s_ws_hd, s_ws_fd) != HTTPD_WS_CLIENT_WEBSOCKET)
+            if (httpd_ws_get_fd_info(s_ws_hd, s_ws_fd) == HTTPD_WS_CLIENT_INVALID)
             {
                 s_ws_fd = -1;
                 s_ws_hd = NULL;
@@ -856,16 +903,13 @@ static void ws_monitor_task(void *pv)
             }
 
             uint64_t uptime_s = esp_timer_get_time() / 1000000;
-            char json[256];
-            int len = snprintf(json, sizeof(json),
-                               "{\"t\":\"state\",\"ip\":\"%s\",\"uptime_s\":%llu,"
-                               "\"free_heap\":%lu,\"min_free_heap\":%lu}",
-                               s_bridge_ip, uptime_s,
-                               (unsigned long)esp_get_free_heap_size(), (unsigned long)esp_get_minimum_free_heap_size());
-
+            char keepalive[128];
+            int len = snprintf(keepalive, sizeof(keepalive),
+                               "{\"t\":\"keepalive\",\"uptime_s\":%llu,\"ip\":\"%s\"}",
+                               uptime_s, s_bridge_ip);
             httpd_ws_frame_t frame = {
                 .type = HTTPD_WS_TYPE_TEXT,
-                .payload = (uint8_t *)json,
+                .payload = (uint8_t *)keepalive,
                 .len = (size_t)len};
             esp_err_t ret = httpd_ws_send_frame_async(s_ws_hd, s_ws_fd, &frame);
             if (ret != ESP_OK)
@@ -875,7 +919,7 @@ static void ws_monitor_task(void *pv)
                 ESP_LOGI(TAG, "WS send failed, client removed");
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
     vTaskDelete(NULL);
 }
@@ -898,6 +942,13 @@ static esp_err_t dashboard_css_handler(httpd_req_t *req)
     return send_embedded_asset(req, dashboard_css_start, dashboard_css_end, "text/css");
 }
 
+static void add_ip_to_json(cJSON *obj, const char *key, esp_ip4_addr_t addr)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), IPSTR, IP2STR(&addr));
+    cJSON_AddStringToObject(obj, key, buf);
+}
+
 static esp_err_t gateway_info_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
@@ -906,6 +957,23 @@ static esp_err_t gateway_info_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(resp, "uptime_s", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(resp, "free_heap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(resp, "min_free_heap", esp_get_minimum_free_heap_size());
+
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            add_ip_to_json(resp, "gateway", ip_info.gw);
+            add_ip_to_json(resp, "netmask", ip_info.netmask);
+        }
+        esp_netif_dns_info_t dns;
+        if (esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK && dns.ip.u_addr.ip4.addr != 0) {
+            add_ip_to_json(resp, "dns1", dns.ip.u_addr.ip4);
+        }
+        if (esp_netif_get_dns_info(netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK && dns.ip.u_addr.ip4.addr != 0) {
+            add_ip_to_json(resp, "dns2", dns.ip.u_addr.ip4);
+        }
+    }
+
     const char *resp_str = cJSON_Print(resp);
     httpd_resp_sendstr(req, resp_str);
     free((void *)resp_str);
@@ -1001,6 +1069,68 @@ static esp_err_t qrcode_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t ota_handler(httpd_req_t *req)
+{
+    esp_ota_handle_t ota_handle = 0;
+    const esp_partition_t *partition = esp_ota_get_next_update_partition(NULL);
+    if (!partition)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No OTA partition");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &ota_handle);
+    if (err != ESP_OK)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
+        return ESP_FAIL;
+    }
+
+    char buf[1024];
+    int remaining = req->content_len;
+    int received;
+
+    while (remaining > 0)
+    {
+        int to_read = remaining > sizeof(buf) ? sizeof(buf) : remaining;
+        received = httpd_req_recv(req, buf, to_read);
+        if (received <= 0)
+        {
+            esp_ota_abort(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Read error");
+            return ESP_FAIL;
+        }
+        err = esp_ota_write(ota_handle, buf, received);
+        if (err != ESP_OK)
+        {
+            esp_ota_abort(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write error");
+            return ESP_FAIL;
+        }
+        remaining -= received;
+    }
+
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA end failed");
+        return ESP_FAIL;
+    }
+
+    err = esp_ota_set_boot_partition(partition);
+    if (err != ESP_OK)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Set boot failed");
+        return ESP_FAIL;
+    }
+
+    httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Firmware updated, rebooting...\"}");
+    ESP_LOGI(TAG, "OTA successful, rebooting in 1s");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    return ESP_OK;
+}
+
 void wifi_server_broadcast(void)
 {
     send_udp_broadcast();
@@ -1036,8 +1166,8 @@ esp_err_t wifi_server_start(void)
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.max_uri_handlers = 20;
-    config.max_open_sockets = 7;
-    config.keep_alive_enable = true;
+    config.max_open_sockets = 10;
+    config.keep_alive_enable = false;
 
     esp_err_t err = httpd_start(&s_server, &config);
     if (err != ESP_OK)
@@ -1123,12 +1253,26 @@ esp_err_t wifi_server_start(void)
         .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &reset_uri);
 
+    httpd_uri_t broadcast_uri = {
+        .uri = "/api/gateway/broadcast",
+        .method = HTTP_POST,
+        .handler = broadcast_handler,
+        .user_ctx = NULL};
+    httpd_register_uri_handler(s_server, &broadcast_uri);
+
     httpd_uri_t qrcode_uri = {
         .uri = "/api/qrcode",
         .method = HTTP_GET,
         .handler = qrcode_handler,
         .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &qrcode_uri);
+
+    httpd_uri_t ota_uri = {
+        .uri = "/api/ota",
+        .method = HTTP_POST,
+        .handler = ota_handler,
+        .user_ctx = NULL};
+    httpd_register_uri_handler(s_server, &ota_uri);
 
     httpd_uri_t root_uri = {
         .uri = "/",

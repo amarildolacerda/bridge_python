@@ -48,7 +48,7 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 - `l` — lista devices registrados (com índices numéricos)
 - `s` — status do bridge (IP, total devices, uptime)
 - `d <id|índice>` — detalhes de um device (aceita ID ou número da lista `l`)
-- `b` — broadcast ping (envia `ping:true` via UDP, espera 3s, mostra descobertos + registrados)
+- `b` — broadcast re-register (envia `re_register:true` via UDP, clients re-registram via HTTP, mostra registrados + descobertos)
 - `r` — restart
 - `h` / `?` — ajuda
 - Usa `getchar()` single-key, prompt `bridge>` só aparece após comando executado
@@ -81,8 +81,8 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 7. Persistir devices bridgeados em NVS para restaurar no boot
 8. Clients enviam `bridge_connected` no `/api/state`
 9. DHT21 client: GPIO 5, tipo DHT21, fallback `isnan()` não envia ao bridge (flag `s_dht_valid`)
-10. Clients respondem a `ping:true` no UDP enviando `{"discover":true,"id":"..."}` de volta
-11. Bridge broadcast (`b`): envia `ping:true` via UDP, mostra IPs descobertos + devices registrados
+10. Clients respondem a `re_register:true` no UDP registrando novamente via HTTP POST `/api/device/register`
+11. Bridge broadcast (`b`): envia `re_register:true` via UDP, clients re-registram via HTTP, mostra registrados + descobertos
 12. Dashboard web tem card QR code do RainMaker em `/api/qrcode`
 
 ## Regras de AI

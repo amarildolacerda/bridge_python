@@ -12,19 +12,31 @@
 #include <freertos/task.h>
 #include <string.h>
 #include <inttypes.h>
+#include <esp_rmaker_utils.h>
 
 static const char *TAG = "console";
 static TaskHandle_t s_console_task = NULL;
 
 static void print_help(void)
 {
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    char ip_str[16] = "0.0.0.0";
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
+        }
+    }
+
     printf("\n--- Comandos ---\n");
     printf("  l      - listar devices registrados\n");
     printf("  s      - status geral\n");
     printf("  d      - detalhes de um device\n");
-    printf("  b      - broadcast discovery\n");
+    printf("  b      - broadcast re-register\n");
+    printf("  f      - factory reset (limpa tudo e reprovisiona)\n");
     printf("  r      - restart\n");
     printf("  h/?    - esta ajuda\n");
+    printf("  Dashboard: http://%s\n", ip_str);
 }
 
 static void cmd_list(void)
@@ -53,6 +65,11 @@ static void cmd_list(void)
     }
 }
 
+static void print_ip_addr(const char *label, esp_ip4_addr_t addr)
+{
+    printf("  %s: " IPSTR "\n", label, IP2STR(&addr));
+}
+
 static void cmd_status(void)
 {
     int count = 0;
@@ -73,6 +90,20 @@ static void cmd_status(void)
 
     printf("\n--- Status ---\n");
     printf("  IP:        %s\n", ip_str);
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            print_ip_addr("Gateway", ip_info.gw);
+            printf("  Mascara:   " IPSTR "\n", IP2STR(&ip_info.netmask));
+        }
+        esp_netif_dns_info_t dns;
+        if (esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK && dns.ip.u_addr.ip4.addr != 0) {
+            print_ip_addr("DNS1", dns.ip.u_addr.ip4);
+        }
+        if (esp_netif_get_dns_info(netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK && dns.ip.u_addr.ip4.addr != 0) {
+            print_ip_addr("DNS2", dns.ip.u_addr.ip4);
+        }
+    }
     printf("  Devices:   %d registrados\n", count);
     printf("  Uptime:    %llds\n", uptime_us / 1000000LL);
     printf("  Heap:      %" PRIu32 " KB livre (min %" PRIu32 " KB)\n",
@@ -146,27 +177,22 @@ static void cmd_detail(void)
     }
 }
 
+static void cmd_factory_reset(void)
+{
+    printf("\n--- Factory Reset ---\n");
+    printf("  LIMPANDO TODOS OS DADOS (WiFi, RainMaker, devices)...\n");
+    printf("  O bridge sera reiniciado em 3s para reprovisionamento.\n");
+    fflush(stdout);
+    esp_rmaker_factory_reset(0, 3);
+}
+
 static void cmd_broadcast(void)
 {
-    printf("\n--- Broadcast ---\n");
+    printf("\n--- Re-register ---\n");
     wifi_server_broadcast();
-    printf("  Bridge announcement enviado.\n");
-    printf("  Aguardando 3s por respostas...\n");
+    printf("  Pedido de re-registro enviado.\n");
+    printf("  Aguardando 3s por re-registros...\n");
     vTaskDelay(pdMS_TO_TICKS(3000));
-
-    discovered_ip_t discovered[MAX_DISCOVERED_IPS];
-    int count = wifi_server_get_discovered_ips(discovered, MAX_DISCOVERED_IPS);
-
-    if (count > 0) {
-        printf("  Clients descobertos via UDP:\n");
-        for (int i = 0; i < count; i++) {
-            int64_t ago = (esp_timer_get_time() - discovered[i].last_seen_us) / 1000000LL;
-            printf("    [%d] %s @ %s (visto ha %llds)\n",
-                   i, discovered[i].id, discovered[i].ip, ago);
-        }
-    } else {
-        printf("  Nenhum client descoberto via UDP.\n");
-    }
 
     int reg_count = 0;
     bridged_device_t *devices = device_registry_get_all(&reg_count);
@@ -180,6 +206,19 @@ static void cmd_broadcast(void)
                    i, devices[i].name, devices[i].id, online_str,
                    devices[i].ip, ago);
         }
+    } else {
+        printf("  Nenhum device registrado.\n");
+    }
+
+    discovered_ip_t discovered[MAX_DISCOVERED_IPS];
+    int disc_count = wifi_server_get_discovered_ips(discovered, MAX_DISCOVERED_IPS);
+    if (disc_count > 0) {
+        printf("  Clients descobertos via UDP (nao registrados):\n");
+        for (int i = 0; i < disc_count; i++) {
+            int64_t ago = (esp_timer_get_time() - discovered[i].last_seen_us) / 1000000LL;
+            printf("    [%d] %s @ %s (visto ha %llds)\n",
+                   i, discovered[i].id, discovered[i].ip, ago);
+        }
     }
 }
 
@@ -187,8 +226,18 @@ static void console_task(void *arg)
 {
     (void)arg;
 
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    char ip_str[16] = "0.0.0.0";
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info.ip));
+        }
+    }
+
     printf("\n========================================\n");
     printf("  Bridge Console pronto!\n");
+    printf("  http://%s\n", ip_str);
     printf("  Pressione 'h' para ajuda\n");
     printf("========================================\n");
 
@@ -215,6 +264,11 @@ static void console_task(void *arg)
         case 'd':
         case 'D':
             cmd_detail();
+            break;
+
+        case 'f':
+        case 'F':
+            cmd_factory_reset();
             break;
 
         case 'b':

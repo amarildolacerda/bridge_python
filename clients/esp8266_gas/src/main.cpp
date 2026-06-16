@@ -6,6 +6,7 @@
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <EEPROM.h>
+#include <ArduinoOTA.h>
 #include "config.h"
 #include "pages.h"
 
@@ -96,6 +97,7 @@ static bool http_post(const char *path, const String &body)
 {
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + path);
     s_http.addHeader("Content-Type", "application/json");
+    s_http.addHeader("Connection", "close");
     s_http.setTimeout(5000);
     int code = s_http.POST(body);
     bool ok = (code == 200);
@@ -143,6 +145,7 @@ static void send_heartbeat(void)
         return;
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + "/api/device/heartbeat");
     s_http.addHeader("Content-Type", "application/json");
+    s_http.addHeader("Connection", "close");
     s_http.setTimeout(3000);
     String body = "{\"id\":\"" + String(s_device_id) + "\"}";
     s_http.POST(body);
@@ -156,8 +159,16 @@ static void send_state(bool force)
 
     static int last_level = -1;
     static bool last_alarm = false;
-    bool changed = (s_gas_level != last_level || s_alarm != last_alarm);
-    if (!force && !changed)
+    bool changed = false;
+    if (force) {
+        changed = true;
+    } else {
+        if (s_alarm != last_alarm)
+            changed = true;
+        else if (abs(s_gas_level - last_level) >= STATE_SEND_THRESHOLD)
+            changed = true;
+    }
+    if (!changed)
         return;
 
     String body;
@@ -211,19 +222,12 @@ static void maintain_bridge_discovery(void)
                         Serial.printf("[%s] Bridge discovered: http://%s:%d\n", TAG, s_bridge_host, s_bridge_port);
                     }
                 }
-                bool is_ping = doc["ping"] | false;
-                if (is_ping)
+                bool re_reg = doc["re_register"] | false;
+                if (re_reg)
                 {
-                    JsonDocument resp;
-                    resp["service"] = "esp-bridge";
-                    resp["discover"] = true;
-                    resp["id"] = s_device_id;
-                    String payload;
-                    serializeJson(resp, payload);
-                    s_udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
-                    s_udp.write((const uint8_t *)payload.c_str(), payload.length());
-                    s_udp.endPacket();
-                    Serial.printf("[%s] Ping response sent\n", TAG);
+                    Serial.printf("[%s] Re-register requested by bridge\n", TAG);
+                    register_device();
+                    send_state(true);
                 }
             }
         }
@@ -511,6 +515,17 @@ static void handle_serial(void)
         }
         Serial.printf("-------------------------\n\n");
         break;
+    case 'u':
+    case 'U':
+        Serial.printf("\n--- OTA ---\n");
+        Serial.printf("  Hostname: %s.local\n", s_device_id);
+        Serial.printf("  Port:     8266 (ArduinoOTA)\n");
+        Serial.printf("  PlatformIO CLI:\n");
+        Serial.printf("    pio run -t upload --upload-port %s.local\n", s_device_id);
+        Serial.printf("  espota.py:\n");
+        Serial.printf("    espota.py -i %s.local -p 8266 -f firmware.bin\n", s_device_id);
+        Serial.printf("-------------\n\n");
+        break;
     case 'h':
     case 'H':
     case '?':
@@ -518,6 +533,7 @@ static void handle_serial(void)
         Serial.printf("  l    - ler sensor agora\n");
         Serial.printf("  r    - reset\n");
         Serial.printf("  s    - status do dispositivo\n");
+        Serial.printf("  u    - info OTA\n");
         Serial.printf("  h/?  - esta ajuda\n");
         Serial.printf("  Browser: http://%s\n", WiFi.localIP().toString().c_str());
         if (s_bridge_discovered)
@@ -571,6 +587,8 @@ void setup(void)
     randomSeed(analogRead(A0));
     init_hardware();
 
+    WiFi.setAutoReconnect(true);
+
     s_udp.begin(DISCOVERY_PORT);
     Serial.printf("[%s] UDP listener on port %d\n", TAG, DISCOVERY_PORT);
 
@@ -580,6 +598,18 @@ void setup(void)
         delay(5000);
         ESP.restart();
     }
+
+    ArduinoOTA.setHostname(s_device_id);
+    ArduinoOTA.onStart([]() { Serial.printf("[%s] OTA update start\n", TAG); });
+    ArduinoOTA.onEnd([]() { Serial.printf("[%s] OTA update end\n", TAG); });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("[%s] OTA progress: %u%%\r", TAG, (progress * 100) / total);
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("[%s] OTA error: %d\n", TAG, error);
+    });
+    ArduinoOTA.begin();
+    Serial.printf("[%s] OTA ready: %s.local\n", TAG, s_device_id);
 
     s_server.on("/", handle_root);
     s_server.on("/api/state", handle_api_state);
@@ -605,6 +635,7 @@ void loop(void)
 {
     handle_serial();
     check_config_portal_timeout();
+    ArduinoOTA.handle();
     s_server.handleClient();
 
     if (WiFi.status() != WL_CONNECTED)
@@ -640,6 +671,13 @@ void loop(void)
         s_last_state_update = now;
         read_sensor();
         send_state(false);
+    }
+
+    static unsigned long s_last_force_send = 0;
+    if (now - s_last_force_send > STATE_FORCE_INTERVAL)
+    {
+        s_last_force_send = now;
+        send_state(true);
     }
 
 #ifdef LED_PIN

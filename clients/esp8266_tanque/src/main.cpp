@@ -246,6 +246,13 @@ static void maintain_bridge_discovery(void)
                         Serial.printf("[%s] Bridge discovered: %s:%d\n", TAG, s_bridge_host, s_bridge_port);
                     }
                 }
+                bool re_reg = doc["re_register"] | false;
+                if (re_reg)
+                {
+                    Serial.printf("[%s] Re-register requested by bridge\n", TAG);
+                    register_device();
+                    send_state();
+                }
             }
         }
     }
