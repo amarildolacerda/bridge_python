@@ -90,3 +90,7 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 1. manter skills enxutas
 2. economizar tokens simplificando com a comunição
 3. manter uma comunicação objetiva sem rodeios
+
+### Clientes estáveis (não modificar)
+- `clients/esp8266_gas/` — estável, não aplicar alterações
+- `clients/esp8266_dht21/` — estável, não aplicar alterações
