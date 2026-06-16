@@ -45,7 +45,8 @@ el.textContent=d.state?'\u26A1':'\u25CB';
 el.className='valor-status'+(d.state?' on':' off');
 lb.textContent=d.state?'LIGADO':'DESLIGADO';
     let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
-    inf.textContent='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm | Up: '+upt;
+    let ls=d.last_send_s;let lastSend=ls==null?'nunca':ls<60?ls+'s':ls<3600?Math.floor(ls/60)+'m':Math.floor(ls/3600)+'h';
+    inf.innerHTML='IP: '+d.ip+' | RSSI: '+d.rssi+'dBm<br>Up: '+upt+' | Ultima coleta: '+lastSend;
 }catch{el.textContent='\u26A0';el.className='valor-status off';lb.textContent='Erro de conex\u00E3o'}
 }
 async function setState(cmd){try{await fetch('/api/'+cmd,{method:'POST'});await fetchState()}catch{inf.textContent='Erro ao enviar comando'}}

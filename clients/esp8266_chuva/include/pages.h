@@ -66,7 +66,8 @@ document.getElementById('rssi').textContent=d.rssi+' dBm';
 let up=d.uptime_s||0;
 document.getElementById('uptime').textContent=Math.floor(up/3600)+'h'+Math.floor((up%3600)/60)+'m';
 document.getElementById('sub').textContent='IP: '+(d.ip||'—');
-document.getElementById('footer').textContent='Atualizado: '+new Date().toLocaleTimeString();
+ let ls=d.last_send_s;let lastSend=ls==null?'nunca':ls<60?ls+'s':ls<3600?Math.floor(ls/60)+'m':Math.floor(ls/3600)+'h';
+ document.getElementById('footer').innerHTML=lastSend?'Ultima coleta: '+lastSend:'';
 }catch(e){document.getElementById('level').textContent='ERRO';}
 }
 load();setInterval(load,5000);

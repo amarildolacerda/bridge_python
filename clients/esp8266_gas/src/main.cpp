@@ -30,6 +30,7 @@ static bool s_sensor_error = false;
 static bool s_normal_state = false;
 static int s_battery = 100;
 static unsigned long s_start_time = 0;
+static unsigned long s_last_send_ms = 0;
 
 static char s_device_id[32];
 static char s_device_name[48] = DEVICE_NAME;
@@ -183,6 +184,7 @@ static void send_state(bool force)
 
     if (http_post("/api/device/state", body))
     {
+        s_last_send_ms = millis();
         last_level = s_gas_level;
         last_alarm = s_alarm;
         Serial.printf("[%s] gas=%d%% alarm=%s\n", TAG, s_gas_level, s_alarm ? "SIM" : "nao");
@@ -482,6 +484,7 @@ static void handle_api_state(void)
         doc["ip"] = WiFi.localIP().toString();
         doc["rssi"] = WiFi.RSSI();
         doc["uptime_s"] = (millis() - s_start_time) / 1000;
+        if (s_last_send_ms) doc["last_send_s"] = (millis() - s_last_send_ms) / 1000;
         serializeJson(doc, json);
     }
     s_server.send(200, "application/json", json);

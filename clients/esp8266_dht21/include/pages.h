@@ -40,7 +40,8 @@ ipEl.textContent='http://'+d.ip;
 tempEl.textContent=d.temperature.toFixed(1)+'\u00B0C';
 humEl.textContent=d.humidity.toFixed(1)+'%';
     let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
-    inf.textContent='RSSI: '+d.rssi+'dBm | Up: '+upt;
+    let ls=d.last_send_s;let lastSend=ls==null?'nunca':ls<60?ls+'s':ls<3600?Math.floor(ls/60)+'m':Math.floor(ls/3600)+'h';
+    inf.innerHTML='RSSI: '+d.rssi+'dBm | Up: '+upt+'<br>Última coleta: '+lastSend;
 }catch{inf.textContent='Erro de conex\u00E3o'}
 }
 fetchState();setInterval(fetchState,3000)

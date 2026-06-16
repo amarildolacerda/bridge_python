@@ -28,6 +28,7 @@ static float s_humidity = 50.0;
 static int s_dimmer_level = 128;
 static int s_battery = 100;
 static unsigned long s_start_time = 0;
+static unsigned long s_last_send_ms = 0;
 
 static char s_device_id[32];
 static char s_device_name[48] = DEVICE_NAME;
@@ -230,6 +231,7 @@ static void send_state(bool force)
             s_last_hum = s_humidity;
         }
 
+        s_last_send_ms = millis();
         if (strcmp(type, "onoff") == 0)
             Serial.printf("[%s] %s\n", TAG, s_onoff_state ? "ON" : "OFF");
         else if (strcmp(type, "dimmable") == 0)
@@ -615,6 +617,7 @@ static void handle_api_state(void)
         doc["ip"] = WiFi.localIP().toString();
         doc["rssi"] = WiFi.RSSI();
         doc["uptime_s"] = (millis() - s_start_time) / 1000;
+        if (s_last_send_ms) doc["last_send_s"] = (millis() - s_last_send_ms) / 1000;
         doc["bridge_connected"] = s_bridge_connected;
         serializeJson(doc, json);
     }

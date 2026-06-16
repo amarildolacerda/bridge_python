@@ -121,7 +121,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *hum = esp_rmaker_param_create("Humidity", NULL, esp_rmaker_float(0.0f), PROP_FLAG_READ);
-            if (hum) esp_rmaker_device_add_param(rmaker_dev, hum);
+            if (hum) {
+                esp_rmaker_param_add_ui_type(hum, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, hum);
+            }
         }
         break;
     }
@@ -130,7 +133,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *contact = esp_rmaker_param_create("Contact", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
-            if (contact) esp_rmaker_device_add_param(rmaker_dev, contact);
+            if (contact) {
+                esp_rmaker_param_add_ui_type(contact, ESP_RMAKER_UI_TOGGLE);
+                esp_rmaker_device_add_param(rmaker_dev, contact);
+            }
         }
         break;
     }
@@ -139,7 +145,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *occ = esp_rmaker_param_create("Occupancy", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
-            if (occ) esp_rmaker_device_add_param(rmaker_dev, occ);
+            if (occ) {
+                esp_rmaker_param_add_ui_type(occ, ESP_RMAKER_UI_TOGGLE);
+                esp_rmaker_device_add_param(rmaker_dev, occ);
+            }
         }
         break;
     }
@@ -148,7 +157,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *light = esp_rmaker_param_create("Light", NULL, esp_rmaker_int(0), PROP_FLAG_READ);
-            if (light) esp_rmaker_device_add_param(rmaker_dev, light);
+            if (light) {
+                esp_rmaker_param_add_ui_type(light, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, light);
+            }
         }
         break;
     }
@@ -157,7 +169,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *level = esp_rmaker_param_create("Level", NULL, esp_rmaker_int(0), PROP_FLAG_READ);
-            if (level) esp_rmaker_device_add_param(rmaker_dev, level);
+            if (level) {
+                esp_rmaker_param_add_ui_type(level, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, level);
+            }
         }
         break;
     }
@@ -166,9 +181,15 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *gas = esp_rmaker_param_create("GasLevel", NULL, esp_rmaker_int(0), PROP_FLAG_READ);
-            if (gas) esp_rmaker_device_add_param(rmaker_dev, gas);
+            if (gas) {
+                esp_rmaker_param_add_ui_type(gas, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, gas);
+            }
             esp_rmaker_param_t *alarm = esp_rmaker_param_create("GasAlarm", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
-            if (alarm) esp_rmaker_device_add_param(rmaker_dev, alarm);
+            if (alarm) {
+                esp_rmaker_param_add_ui_type(alarm, ESP_RMAKER_UI_TOGGLE);
+                esp_rmaker_device_add_param(rmaker_dev, alarm);
+            }
         }
         break;
     }
@@ -177,7 +198,10 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
         if (rmaker_dev) {
             esp_rmaker_param_t *rain = esp_rmaker_param_create("RainLevel", NULL, esp_rmaker_int(100), PROP_FLAG_READ);
-            if (rain) esp_rmaker_device_add_param(rmaker_dev, rain);
+            if (rain) {
+                esp_rmaker_param_add_ui_type(rain, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, rain);
+            }
         }
         break;
     }

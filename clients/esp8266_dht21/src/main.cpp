@@ -31,6 +31,7 @@ static float s_temperature = 0;
 static float s_humidity = 0;
 static int s_battery = 100;
 static unsigned long s_start_time = 0;
+static unsigned long s_last_send_ms = 0;
 
 static char s_device_id[32];
 static char s_device_name[48] = DEVICE_NAME;
@@ -179,8 +180,6 @@ static void send_state(bool force)
 {
     if (!s_bridge_discovered || !s_bridge_connected)
         return;
-    if (!s_dht_valid)
-        return;
 
     static float last_temp = -999;
     static float last_hum = -999;
@@ -212,6 +211,7 @@ static void send_state(bool force)
     {
         last_temp = s_temperature;
         last_hum = s_humidity;
+        s_last_send_ms = millis();
         Serial.printf("[%s] temp=%.1f hum=%.1f (GPIO %d)\n", TAG, s_temperature, s_humidity, s_dht_pin);
         s_pending_register_state = false;
     }
@@ -528,6 +528,7 @@ static void handle_api_state(void)
         doc["ip"] = WiFi.localIP().toString();
         doc["rssi"] = WiFi.RSSI();
         doc["uptime_s"] = (millis() - s_start_time) / 1000;
+        if (s_last_send_ms) doc["last_send_s"] = (millis() - s_last_send_ms) / 1000;
         serializeJson(doc, json);
     }
     s_server.send(200, "application/json", json);

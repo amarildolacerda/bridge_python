@@ -48,8 +48,9 @@ glEl.textContent=lvl+'%';
 if(lvl>=30){glEl.className='valor-gas alarm';abEl.textContent='\u26A0 VAZAMENTO';abEl.className='alarm-badge danger'}
 else if(lvl>=15){glEl.className='valor-gas warn';abEl.textContent='Atencao';abEl.className='alarm-badge alert'}
 else{glEl.className='valor-gas safe';abEl.textContent='Seguro';abEl.className='alarm-badge safe'}
-let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
-inf.textContent='RSSI: '+d.rssi+'dBm | Up: '+upt;
+    let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
+    let ls=d.last_send_s;let lastSend=ls==null?'nunca':ls<60?ls+'s':ls<3600?Math.floor(ls/60)+'m':Math.floor(ls/3600)+'h';
+    inf.innerHTML='RSSI: '+d.rssi+'dBm | Up: '+upt+'<br>Ultima coleta: '+lastSend;
 }catch{glEl.textContent='\u26A0';glEl.className='valor-gas alarm';inf.textContent='Erro de conex\u00E3o'}
 }
 fetchState();setInterval(fetchState,3000)
