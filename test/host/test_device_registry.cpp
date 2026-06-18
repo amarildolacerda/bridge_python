@@ -334,8 +334,8 @@ TEST(update_state_multiple_keys)
     device_registry_register("multi_state", DEVICE_TYPE_ON_OFF, "Multi", "1.1.1.1");
     device_registry_update_state("multi_state", "power", "on");
     device_registry_update_state("multi_state", "brightness", "75");
-    const char *json = device_registry_get_state_json("multi_state");
-    ASSERT_NOT_NULL(json);
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("multi_state", json, sizeof(json)));
     ASSERT(strstr(json, "\"power\":\"on\"") != NULL);
     ASSERT(strstr(json, "\"brightness\":75") != NULL);
 }
@@ -345,10 +345,9 @@ TEST(update_state_replaces_key)
     device_registry_register("replace_state", DEVICE_TYPE_DIMMABLE, "Replace", "1.1.1.1");
     device_registry_update_state("replace_state", "power", "on");
     device_registry_update_state("replace_state", "power", "off");
-    const char *json = device_registry_get_state_json("replace_state");
-    ASSERT_NOT_NULL(json);
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("replace_state", json, sizeof(json)));
     ASSERT(strstr(json, "\"power\":\"off\"") != NULL);
-    // "on" should not appear
     ASSERT(strstr(json, "\"power\":\"on\"") == NULL);
 }
 
@@ -364,22 +363,24 @@ TEST(update_state_marks_device_online)
 TEST(get_state_json_empty)
 {
     device_registry_register("empty_state", DEVICE_TYPE_ON_OFF, "Empty", "1.1.1.1");
-    const char *json = device_registry_get_state_json("empty_state");
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("empty_state", json, sizeof(json)));
     ASSERT_STR_EQ("{}", json);
 }
 
 TEST(get_state_json_unknown_device)
 {
-    const char *json = device_registry_get_state_json("ghost");
-    ASSERT_STR_EQ("{}", json);
+    char json[64];
+    esp_err_t err = device_registry_get_state_json("ghost", json, sizeof(json));
+    ASSERT(err == ESP_ERR_NOT_FOUND);
 }
 
 TEST(get_state_json_boolean)
 {
     device_registry_register("bool_state", DEVICE_TYPE_ON_OFF, "Bool", "1.1.1.1");
     device_registry_update_state("bool_state", "power", "true");
-    const char *json = device_registry_get_state_json("bool_state");
-    ASSERT_NOT_NULL(json);
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("bool_state", json, sizeof(json)));
     ASSERT(strstr(json, "\"power\":true") != NULL);
 }
 
@@ -387,8 +388,8 @@ TEST(get_state_json_number)
 {
     device_registry_register("num_state", DEVICE_TYPE_TEMPERATURE_SENSOR, "Num", "1.1.1.1");
     device_registry_update_state("num_state", "temperature", "25.5");
-    const char *json = device_registry_get_state_json("num_state");
-    ASSERT_NOT_NULL(json);
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("num_state", json, sizeof(json)));
     ASSERT(strstr(json, "\"temperature\":25.5") != NULL);
 }
 
@@ -396,8 +397,8 @@ TEST(get_state_json_negative_number)
 {
     device_registry_register("neg_state", DEVICE_TYPE_TEMPERATURE_SENSOR, "Neg", "1.1.1.1");
     device_registry_update_state("neg_state", "temp", "-5");
-    const char *json = device_registry_get_state_json("neg_state");
-    ASSERT_NOT_NULL(json);
+    char json[64];
+    ASSERT_EQ(ESP_OK, device_registry_get_state_json("neg_state", json, sizeof(json)));
     ASSERT(strstr(json, "\"temp\":-5") != NULL);
 }
 
