@@ -104,7 +104,10 @@ static void rmaker_update_task_func(void *arg)
                 param_name = "GasLevel";
                 param_val = esp_rmaker_int(atoi(msg.value));
             } else if (strcmp(msg.key, "alarm") == 0) {
-                param_name = "GasAlarm";
+                param_name = "Contact";
+                param_val = esp_rmaker_bool(strcmp(msg.value, "true") == 0 || strcmp(msg.value, "1") == 0);
+            } else if (strcmp(msg.key, "rain_digital") == 0) {
+                param_name = "Contact";
                 param_val = esp_rmaker_bool(strcmp(msg.value, "true") == 0 || strcmp(msg.value, "1") == 0);
             } else if (strcmp(msg.key, "rain_level") == 0) {
                 param_name = "RainLevel";
@@ -267,29 +270,34 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
     }
 
     case DEVICE_TYPE_GAS_SENSOR: {
-        rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
+        rmaker_dev = esp_rmaker_device_create(rmaker_name, "esp.device.contact-sensor", priv_id);
         if (rmaker_dev) {
+            esp_rmaker_param_t *contact = esp_rmaker_param_create("Contact", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
+            if (contact) {
+                esp_rmaker_param_add_ui_type(contact, ESP_RMAKER_UI_TOGGLE);
+                esp_rmaker_device_add_param(rmaker_dev, contact);
+            }
             esp_rmaker_param_t *gas = esp_rmaker_param_create("GasLevel", NULL, esp_rmaker_int(0), PROP_FLAG_READ);
             if (gas) {
                 esp_rmaker_param_add_ui_type(gas, ESP_RMAKER_UI_SLIDER);
                 esp_rmaker_device_add_param(rmaker_dev, gas);
-            }
-            esp_rmaker_param_t *alarm = esp_rmaker_param_create("GasAlarm", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
-            if (alarm) {
-                esp_rmaker_param_add_ui_type(alarm, ESP_RMAKER_UI_TOGGLE);
-                esp_rmaker_device_add_param(rmaker_dev, alarm);
             }
         }
         break;
     }
 
     case DEVICE_TYPE_RAIN_SENSOR: {
-        rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OTHER, priv_id);
+        rmaker_dev = esp_rmaker_device_create(rmaker_name, "esp.device.contact-sensor", priv_id);
         if (rmaker_dev) {
-            esp_rmaker_param_t *rain = esp_rmaker_param_create("RainLevel", NULL, esp_rmaker_int(100), PROP_FLAG_READ);
-            if (rain) {
-                esp_rmaker_param_add_ui_type(rain, ESP_RMAKER_UI_SLIDER);
-                esp_rmaker_device_add_param(rmaker_dev, rain);
+            esp_rmaker_param_t *contact = esp_rmaker_param_create("Contact", NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
+            if (contact) {
+                esp_rmaker_param_add_ui_type(contact, ESP_RMAKER_UI_TOGGLE);
+                esp_rmaker_device_add_param(rmaker_dev, contact);
+            }
+            esp_rmaker_param_t *level = esp_rmaker_param_create("RainLevel", NULL, esp_rmaker_int(100), PROP_FLAG_READ);
+            if (level) {
+                esp_rmaker_param_add_ui_type(level, ESP_RMAKER_UI_SLIDER);
+                esp_rmaker_device_add_param(rmaker_dev, level);
             }
         }
         break;

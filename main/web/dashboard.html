@@ -96,6 +96,7 @@ document.getElementById('bridge-info').innerHTML=
 '<div class="row"><span class="label">Máscara</span><span class="value">'+(b.netmask||'—')+'</span></div>'+
 '<div class="row"><span class="label">DNS 1</span><span class="value">'+(b.dns1||'—')+'</span></div>'+
 '<div class="row"><span class="label">DNS 2</span><span class="value">'+(b.dns2||'—')+'</span></div>'+
+'<div class="row"><span class="label">Versão</span><span class="value">'+(b.version||'—')+'</span></div>'+
 '<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>'+
 '<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.free_heap/1024).toFixed(0)+' KB</span></div>';
 document.getElementById('sub').textContent='IP: '+b.ip;

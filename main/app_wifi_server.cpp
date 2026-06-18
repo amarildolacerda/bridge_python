@@ -957,6 +957,7 @@ static esp_err_t gateway_info_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "ip", s_bridge_ip);
+    cJSON_AddStringToObject(resp, "version", FW_VERSION);
     cJSON_AddNumberToObject(resp, "uptime_s", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(resp, "free_heap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(resp, "min_free_heap", esp_get_minimum_free_heap_size());
