@@ -1,10 +1,11 @@
 from __future__ import annotations
 import json
 import time
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from app.device_registry import DeviceRegistry
 from app.models import DeviceType
+from app.websocket_manager import WebSocketManager
 
 _start_time = time.monotonic()
 
@@ -13,8 +14,11 @@ def _uptime_s() -> int:
     return int(time.monotonic() - _start_time)
 
 
-def create_app(registry: DeviceRegistry) -> FastAPI:
+def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = None) -> FastAPI:
+    if ws_manager is None:
+        ws_manager = WebSocketManager()
     app = FastAPI(title="ESP32 Bridge Python", version="0.1.0")
+    app.state.ws_manager = ws_manager
 
     @app.get("/api/ping")
     async def ping():
@@ -38,6 +42,8 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
         slot = registry.register(device_id, device_type, name, ip)
         if slot == -1:
             return JSONResponse({"status": "error", "message": "registry full"}, status_code=500)
+        ws_manager = request.app.state.ws_manager
+        await ws_manager.notify_device_registered(registry.get_device(device_id))
         return {"status": "ok", "slot": slot}
 
     @app.post("/api/device/remove")
@@ -50,6 +56,8 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
         if not device_id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         if registry.remove(device_id):
+            ws_manager = request.app.state.ws_manager
+            await ws_manager.notify_device_removed(device_id)
             return {"status": "ok"}
         return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
 
@@ -70,6 +78,10 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
                 found = True
         if not found:
             return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
+        ws_manager = request.app.state.ws_manager
+        dev = registry.get_device(device_id)
+        if dev:
+            await ws_manager.notify_device_update(dev)
         return {"status": "ok"}
 
     @app.get("/api/device/commands")
@@ -161,6 +173,8 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
             return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
         dev.last_seen = time.time()
         dev.online = True
+        ws_manager = request.app.state.ws_manager
+        await ws_manager.notify_device_online(device_id, True)
         return {"status": "ok"}
 
     @app.post("/api/gateway/broadcast")
@@ -178,6 +192,15 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
     @app.post("/api/ota")
     async def ota():
         return {"status": "ok", "message": "ota not applicable in python"}
+
+    @app.websocket("/ws")
+    async def ws_endpoint(websocket: WebSocket):
+        await ws_manager.connect(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            ws_manager.disconnect(websocket)
 
     @app.get("/")
     async def dashboard_html():
