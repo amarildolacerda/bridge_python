@@ -272,9 +272,8 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
     case DEVICE_TYPE_GAS_SENSOR: {
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OUTLET, priv_id);
         if (rmaker_dev) {
-            esp_rmaker_param_t *power = esp_rmaker_param_create(ESP_RMAKER_DEF_POWER_NAME, NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
+            esp_rmaker_param_t *power = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, false);
             if (power) {
-                esp_rmaker_param_add_ui_type(power, ESP_RMAKER_UI_TOGGLE);
                 esp_rmaker_device_add_param(rmaker_dev, power);
                 esp_rmaker_device_assign_primary_param(rmaker_dev, power);
             }
@@ -290,9 +289,8 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
     case DEVICE_TYPE_RAIN_SENSOR: {
         rmaker_dev = esp_rmaker_device_create(rmaker_name, ESP_RMAKER_DEVICE_OUTLET, priv_id);
         if (rmaker_dev) {
-            esp_rmaker_param_t *power = esp_rmaker_param_create(ESP_RMAKER_DEF_POWER_NAME, NULL, esp_rmaker_bool(false), PROP_FLAG_READ);
+            esp_rmaker_param_t *power = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, false);
             if (power) {
-                esp_rmaker_param_add_ui_type(power, ESP_RMAKER_UI_TOGGLE);
                 esp_rmaker_device_add_param(rmaker_dev, power);
                 esp_rmaker_device_assign_primary_param(rmaker_dev, power);
             }
@@ -329,7 +327,8 @@ esp_err_t rmaker_gateway_device_add(const char *id, device_type_t type)
         return ESP_FAIL;
     }
 
-    if (type == DEVICE_TYPE_ON_OFF || type == DEVICE_TYPE_DIMMABLE) {
+    if (type == DEVICE_TYPE_ON_OFF || type == DEVICE_TYPE_DIMMABLE
+            || type == DEVICE_TYPE_GAS_SENSOR || type == DEVICE_TYPE_RAIN_SENSOR) {
         esp_rmaker_device_add_cb(rmaker_dev, write_cb, NULL);
     }
 
