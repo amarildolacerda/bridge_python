@@ -53,6 +53,7 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 - `r` — restart
 - `h` / `?` — ajuda
 - Usa `getchar()` single-key, prompt `bridge>` só aparece após comando executado
+- para descobrir o ip do Bridge rodar discover_bridge.py
 
 ## Provisionamento WiFi
 - Bridge usa **BLE** (não SoftAP): quando não há credenciais STA salvas, inicia BLE advertising `PROV_<nome>`
