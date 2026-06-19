@@ -6,6 +6,12 @@ from fastapi.responses import JSONResponse
 from app.device_registry import DeviceRegistry
 from app.models import DeviceType
 
+_start_time = time.monotonic()
+
+
+def _uptime_s() -> int:
+    return int(time.monotonic() - _start_time)
+
 
 def create_app(registry: DeviceRegistry) -> FastAPI:
     app = FastAPI(title="ESP32 Bridge Python", version="0.1.0")
@@ -135,7 +141,7 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
             "dns1": "",
             "dns2": "",
             "version": "v0.1.0",
-            "uptime_s": int(time.time()),
+            "uptime_s": _uptime_s(),
             "heap_free": 0,
             "total_devices": len(registry.get_all()),
             "hostname": hostname,
