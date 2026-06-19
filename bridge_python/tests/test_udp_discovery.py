@@ -4,7 +4,6 @@ import pytest
 from app.udp_discovery import UDPDiscovery, DISCOVERY_SERVICE
 
 
-@pytest.mark.asyncio
 class TestUDPDiscovery:
     @pytest.fixture
     def discovery(self):
