@@ -151,3 +151,13 @@ class TestHttpAPI:
     async def test_ota(self, client):
         resp = await client.post("/api/ota")
         assert resp.status_code == 200
+
+    async def test_dashboard_html(self, client):
+        resp = await client.get("/")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_dashboard_css(self, client):
+        resp = await client.get("/dashboard.css")
+        assert resp.status_code == 200
+        assert "text/css" in resp.headers["content-type"]

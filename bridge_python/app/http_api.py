@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import time
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from app.device_registry import DeviceRegistry
 from app.models import DeviceType
 
@@ -178,5 +178,15 @@ def create_app(registry: DeviceRegistry) -> FastAPI:
     @app.post("/api/ota")
     async def ota():
         return {"status": "ok", "message": "ota not applicable in python"}
+
+    @app.get("/")
+    async def dashboard_html():
+        from app.web import dashboard_html_content
+        return HTMLResponse(content=dashboard_html_content)
+
+    @app.get("/dashboard.css")
+    async def dashboard_css():
+        from app.web import dashboard_css_content
+        return Response(content=dashboard_css_content, media_type="text/css")
 
     return app
