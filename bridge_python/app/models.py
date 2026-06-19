@@ -38,20 +38,3 @@ class BridgedDevice:
     state: dict[str, float | bool | str] = field(default_factory=dict)
     commands: list[dict] = field(default_factory=list)
 
-
-DEVICE_TYPE_MAP: dict[str, str] = {
-    "onoff": "switch",
-    "dimmable": "light",
-    "temperature": "temperature",
-    "humidity": "humidity",
-    "contact": "contact",
-    "occupancy": "occupancy",
-    "light_sensor": "light_sensor",
-    "tanque": "tanque",
-    "gas": "gas",
-    "rain": "rain",
-    "electricity": "electricity",
-}
-
-
-REGISTER_REQUEST_KEYS = {"id", "type", "name", "ip"}

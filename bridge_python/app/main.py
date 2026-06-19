@@ -13,7 +13,7 @@ LOG = logging.getLogger(__name__)
 
 registry = DeviceRegistry(data_dir=settings.data_dir)
 ws_manager = WebSocketManager()
-app = create_app(registry, ws_manager)
+app = create_app(registry, ws_manager, udp)
 app.state.ws_manager = ws_manager
 
 udp = UDPDiscovery(http_port=settings.http_port)

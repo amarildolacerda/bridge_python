@@ -1,10 +1,13 @@
 from __future__ import annotations
+import asyncio
 import json
+import os
 import time
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from app.device_registry import DeviceRegistry
 from app.models import DeviceType
+from app.udp_discovery import UDPDiscovery
 from app.websocket_manager import WebSocketManager
 
 _start_time = time.monotonic()
@@ -14,11 +17,13 @@ def _uptime_s() -> int:
     return int(time.monotonic() - _start_time)
 
 
-def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = None) -> FastAPI:
+def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = None, udp_discovery: UDPDiscovery | None = None) -> FastAPI:
     if ws_manager is None:
         ws_manager = WebSocketManager()
     app = FastAPI(title="ESP32 Bridge Python", version="0.1.0")
     app.state.ws_manager = ws_manager
+    if udp_discovery:
+        app.state.udp_discovery = udp_discovery
 
     @app.get("/api/ping")
     async def ping():
@@ -178,11 +183,16 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         return {"status": "ok"}
 
     @app.post("/api/gateway/broadcast")
-    async def broadcast():
+    async def broadcast(request: Request):
+        udp = getattr(request.app.state, "udp_discovery", None)
+        if udp:
+            udp.do_broadcast()
         return {"status": "ok", "message": "broadcast sent"}
 
     @app.post("/api/gateway/reset")
     async def reset():
+        loop = asyncio.get_event_loop()
+        loop.call_later(0.5, os._exit, 0)
         return {"status": "ok", "message": "reset initiated"}
 
     @app.get("/api/qrcode")

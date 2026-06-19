@@ -48,7 +48,7 @@ def build_entity_config(
     device_id: str,
     platform: str,
     entity_name: str,
-    dev_name: str,
+    dev: BridgedDevice,
     unit: str = "",
     device_class: str = "",
     icon: str = "",
@@ -60,14 +60,7 @@ def build_entity_config(
         "name": entity_name,
         "state_topic": f"{base_topic}/state",
         "unique_id": f"esp32_bridge_{device_id}_{entity_name}",
-        "device": {
-            "identifiers": [f"esp32_bridge_{device_id}"],
-            "name": dev_name,
-            "sw_version": "bridge_python_0.1.0",
-            "manufacturer": "ESP RainMaker Gateway",
-            "model": "bridge_device",
-            "via_device": "esp32_bridge",
-        },
+        "device": build_device_info(dev),
     }
     if unit:
         config["unit_of_measurement"] = unit
@@ -85,6 +78,10 @@ def build_entity_config(
 
 
 class MQTTDiscovery:
+    @staticmethod
+    def _get_entities(dev_type: DeviceType) -> list[tuple[str, str, str, str, str]]:
+        return DEVICE_ENTITY_MAP.get(dev_type, [])
+
     def __init__(
         self,
         host: str = "core-mosquitto",
@@ -123,13 +120,13 @@ class MQTTDiscovery:
         if not self._connected:
             LOG.warning("MQTT not connected, skipping discovery for %s", dev.id)
             return
-        entities = DEVICE_ENTITY_MAP.get(dev.type, [])
+        entities = self._get_entities(dev.type)
         for entity_name, platform, unit, device_class, icon in entities:
             config = build_entity_config(
                 device_id=dev.id,
                 platform=platform,
                 entity_name=entity_name,
-                dev_name=dev.name,
+                dev=dev,
                 unit=unit,
                 device_class=device_class,
                 icon=icon,
@@ -141,7 +138,7 @@ class MQTTDiscovery:
     async def remove_device_config(self, dev_id: str, dev_type: DeviceType):
         if not self._connected:
             return
-        entities = DEVICE_ENTITY_MAP.get(dev_type, [])
+        entities = self._get_entities(dev_type)
         for entity_name, platform, _, _, _ in entities:
             topic = self._build_topic(platform, dev_id, entity_name)
             await self._publish(topic, "", retain=True)
@@ -150,7 +147,7 @@ class MQTTDiscovery:
     async def publish_state(self, dev: BridgedDevice):
         if not self._connected:
             return
-        entities = DEVICE_ENTITY_MAP.get(dev.type, [])
+        entities = self._get_entities(dev.type)
         for entity_name, platform, _, _, _ in entities:
             value = dev.state.get(entity_name)
             if value is None:

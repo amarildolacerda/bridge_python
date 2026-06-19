@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import os
 import time
 from app.models import BridgedDevice, DeviceType
@@ -127,7 +128,7 @@ class DeviceRegistry:
                 )
                 self._devices[dev.id] = dev
         except (json.JSONDecodeError, KeyError):
-            pass
+            logging.warning("Failed to load devices from %s", self._file_path)
 
     def _get_slot(self, dev: BridgedDevice) -> int:
         for i, d in enumerate(self.get_all()):

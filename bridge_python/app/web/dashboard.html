@@ -98,12 +98,12 @@ document.getElementById('bridge-info').innerHTML=
 '<div class="row"><span class="label">DNS 2</span><span class="value">'+(b.dns2||'—')+'</span></div>'+
 '<div class="row"><span class="label">Versão</span><span class="value">'+(b.version||'—')+'</span></div>'+
 '<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>'+
-'<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.free_heap/1024).toFixed(0)+' KB</span></div>';
+'<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.heap_free/1024).toFixed(0)+' KB</span></div>';
 document.getElementById('sub').textContent='IP: '+b.ip;
 document.getElementById('metric-ip').textContent=b.ip;
 document.getElementById('metric-uptime').textContent=uptime;
-document.getElementById('metric-heap').textContent=(b.free_heap/1024).toFixed(0)+' KB';
-let devs=d.devices||[];
+document.getElementById('metric-heap').textContent=(b.heap_free/1024).toFixed(0)+' KB';
+let devs=Array.isArray(d)?d:[];
 let h='';
 let on=0;
 for(let dev of devs){

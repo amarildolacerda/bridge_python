@@ -66,8 +66,6 @@ class UDPDiscovery:
             self._discovered_ips[sender_id] = (addr[0], time.time())
             self._prune_discovered()
             self._send_response(addr[0])
-        if msg.get("re_register") is True:
-            pass
 
     def _send_response(self, target_ip: str):
         msg = json.dumps({

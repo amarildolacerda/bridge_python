@@ -20,11 +20,12 @@ class TestMQTTDiscovery:
         assert info["model"] == "temperature"
 
     def test_build_entity_config_sensor(self):
+        dev = BridgedDevice(id="esp8266_test", name="Test", type=DeviceType.TEMPERATURE)
         config = build_entity_config(
-            device_id="esp8266_test",
+            device_id=dev.id,
             platform="sensor",
             entity_name="temperature",
-            dev_name="Test",
+            dev=dev,
             unit="°C",
             device_class="temperature",
         )
@@ -36,11 +37,12 @@ class TestMQTTDiscovery:
         assert config["name"] == "temperature"
 
     def test_build_entity_config_switch(self):
+        dev = BridgedDevice(id="esp8266_test", name="Test", type=DeviceType.ONOFF)
         config = build_entity_config(
-            device_id="esp8266_test",
+            device_id=dev.id,
             platform="switch",
             entity_name="power",
-            dev_name="Test",
+            dev=dev,
         )
         assert config["platform"] == "switch"
         assert config["command_topic"] is not None
