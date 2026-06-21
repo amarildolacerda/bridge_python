@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 echo Verificando container esp-rainmaker-dev...
 
-docker ps -a --filter "name=^/esp-matter-dev$" --format "{{.Names}}" > "%TEMP%\docker_check.txt"
+docker ps -a --filter "name=^/esp-rainmaker-dev$" --format "{{.Names}}" > "%TEMP%\docker_check.txt"
 set /p CONTAINER_NAME=<"%TEMP%\docker_check.txt"
 
 if "%CONTAINER_NAME%"=="" (
@@ -40,7 +40,7 @@ if !WAIT_COUNT! gtr 30 (
     echo ERRO: Container nao iniciou apos 30 segundos.
     exit /b 1
 )
-docker inspect -f "{{.State.Status}}" esp-matter-dev > "%TEMP%\docker_state.txt" 2>nul
+docker inspect -f "{{.State.Status}}" esp-rainmaker-dev > "%TEMP%\docker_state.txt" 2>nul
 set /p STATE=<"%TEMP%\docker_state.txt"
 if "!STATE!"=="running" (
     echo Container pronto (!WAIT_COUNT!s)

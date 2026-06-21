@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 
 class UDPBridgeSimulator:
-    def __init__(self, port=5000, http_port=80, bridge_name="esp_matter_bridge_simulator"):
+    def __init__(self, port=5000, http_port=80, bridge_name="esp_bridge_simulator"):
         self.port = port
         self.http_port = http_port
         self.bridge_name = bridge_name
@@ -82,7 +82,7 @@ class UDPBridgeSimulator:
         try:
             data = json.loads(message)
 
-            if data.get("discover") or data.get("service") == "esp-matter-bridge":
+            if data.get("discover") or data.get("service") == "esp-bridge":
                 print(f"Discovery request from {addr[0]}")
                 self.send_bridge_info(addr)
 
@@ -91,7 +91,7 @@ class UDPBridgeSimulator:
 
     def send_bridge_info(self, addr):
         response = {
-            "service": "esp-matter-bridge",
+            "service": "esp-bridge",
             "name": self.bridge_name,
             "http_port": self.http_port,
             "ip_sta": self.ip_sta,
@@ -113,7 +113,7 @@ class UDPBridgeSimulator:
             if self.running:
                 broadcast_addr = ('255.255.255.255', self.port)
                 response = {
-                    "service": "esp-matter-bridge",
+                    "service": "esp-bridge",
                     "name": self.bridge_name,
                     "http_port": self.http_port,
                     "ip_sta": self.ip_sta,
@@ -147,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description='UDP Bridge Simulator for HTTP REST Bridge Testing')
     parser.add_argument('--port', type=int, default=5000, help='UDP discovery port (default: 5000)')
     parser.add_argument('--http-port', type=int, default=80, help='HTTP API port (default: 80)')
-    parser.add_argument('--name', type=str, default='esp_matter_bridge_simulator', help='Bridge name')
+    parser.add_argument('--name', type=str, default='esp_bridge_simulator', help='Bridge name')
 
     args = parser.parse_args()
 

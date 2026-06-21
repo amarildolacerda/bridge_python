@@ -1,13 +1,13 @@
 # ESP Bridge Gateway
 
-Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **ESP RainMaker** ou **ESP-Matter**. Clientes se autodescobrem via UDP, registram-se via HTTP REST API e o bridge gerencia a comunicação bidirecional de estado e comandos.
+Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **ESP RainMaker** ou ao **Home Assistant** via **bridge_python**. Clientes se autodescobrem via UDP, registram-se via HTTP REST API e o bridge gerencia a comunicação bidirecional de estado e comandos.
 
 ## Firmware Variants
 
 | Variante | Protocolo | Build | Entrada |
 |---|---|---|---|
 | **RainMaker Gateway** (`main/`) | ESP RainMaker (MQTT) | ESP-IDF | `idf.py build` |
-| **Matter Bridge** (`matter/`) | ESP-Matter | ESP-IDF | `cd matter && idf.py build` |
+| **Python Bridge** (`bridge_python/`) | MQTT Discovery (HA) | Docker / add-on HA | `python -m app.main` |
 
 ## Clientes Suportados
 
@@ -23,10 +23,10 @@ Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **E
 ## Arquitetura
 
 ```
-┌──────────────────┐    UDP:5000     ┌──────────────────┐     RainMaker/Matter      ┌─────────┐
+┌──────────────────┐    UDP:5000     ┌──────────────────┐      RainMaker / HA       ┌─────────┐
 │  ESP8266 Client   │ ◄──"esp-bridge"──►   ESP32 Bridge   │ ◄──────────────────────► │  Alexa   │
-│  (on_off, dh11,   │    HTTP:80      │  (RainMaker /     │      (Wi-Fi / Thread)     │  (Echo)  │
-│   tanque)         │ ◄───REST API───►    Matter)         │                          │          │
+│  (on_off, dht21,  │    HTTP:80      │  ou bridge_python │      (MQTT Discovery)    │  (Echo)  │
+│   tanque)         │ ◄───REST API───►                      │                          │          │
 └──────────────────┘                  └──────────────────┘                          └─────────┘
 ```
 
@@ -62,12 +62,10 @@ Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **E
 | GET | `/api/device/info?id=X` | Informações do dispositivo |
 | GET | `/api/devices` | Listar dispositivos |
 | GET | `/api/gateway/info` | Status do gateway (RainMaker) |
-| GET | `/api/bridge/info` | Status do bridge (Matter) |
-| GET | `/api/bridge/commissioning` | Códigos de comissionamento (Matter) |
 | GET | `/api/ping` | Health check |
 | POST | `/api/device/heartbeat` | Heartbeat do cliente (RainMaker) |
 | POST | `/api/gateway/reset` | Reiniciar gateway |
-| GET | `/ws` | WebSocket (Matter) |
+| GET | `/ws` | WebSocket (atualizações em tempo real) |
 
 ### Cliente gas
 
@@ -88,17 +86,17 @@ Gateway bridge para conectar dispositivos **ESP8266/ESP32** à **Alexa** via **E
 
 ## Dispositivos Suportados
 
-| Tipo | Descrição | RainMaker | Matter |
-|---|---|---|---|
-| `onoff` | Interruptor | switch | 0x0100 (OnOff Light) |
-| `dimmable` | Luminosidade | lightbulb | 0x0101 (Dimmable Light) |
-| `temperature` | Temperatura | temp_sensor + Humidity | 0x0302 (Temp Sensor) |
-| `humidity` | Umidade | device_create + Humidity | 0x0307 (Humidity Sensor) |
-| `contact` | Sensor de contato | contact_sensor | 0x0015 (Contact Sensor) |
-| `occupancy` | Sensor de presença | device_create + Occupancy | 0x0107 (Occupancy Sensor) |
-| `light_sensor` | Luminosidade | device_create + Light | 0x0106 (Light Sensor) |
-| `tanque` | Nível d'água | device_create + Level | — |
-| `gas` | Detector de gás | device_create + GasLevel / GasAlarm | — |
+| Tipo | Descrição | RainMaker |
+|---|---|---|
+| `onoff` | Interruptor | switch |
+| `dimmable` | Luminosidade | lightbulb |
+| `temperature` | Temperatura | temp_sensor + Humidity |
+| `humidity` | Umidade | device_create + Humidity |
+| `contact` | Sensor de contato | contact_sensor |
+| `occupancy` | Sensor de presença | device_create + Occupancy |
+| `light_sensor` | Luminosidade | device_create + Light |
+| `tanque` | Nível d'água | device_create + Level |
+| `gas` | Detector de gás | device_create + GasLevel / GasAlarm |
 
 ## Como preparar o ambiente
 
@@ -145,14 +143,13 @@ idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-### Matter Bridge
+### Python Bridge (Home Assistant)
 
 ```bash
-export ESP_MATTER_PATH=/path/to/esp-matter
-cd matter/
-idf.py set-target esp32
-idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor
+cd bridge_python
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+python -m app.main
 ```
 
 ### Clientes (PlatformIO)
@@ -182,7 +179,6 @@ python3 test/escutar_udp.py
 ## Configuração
 
 - **RainMaker**: até 32 dispositivos bridged
-- **Matter**: configurável via `CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT`
 - **Partition**: OTA com 2 slots de 1600K
 - **mDNS**: bridge anuncia como `espbridge.local`
 

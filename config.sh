@@ -9,7 +9,7 @@ NC='\033[0m'
 
 echo "🔍 Detectando ambiente..."
 
-# Verificar se está dentro do container espressif/esp-matter
+# Verificar se está dentro do container ESP-IDF
 if [ -f /.dockerenv ] || [ -d /opt/espressif/esp-idf ]; then
     echo -e "${GREEN}✅ Ambiente CONTAINER detectado${NC}"
     

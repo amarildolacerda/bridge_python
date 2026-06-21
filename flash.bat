@@ -1,5 +1,5 @@
 @echo off
-REM Flash ESP-Matter Bridge via esptool
+REM Flash ESP RainMaker Gateway via esptool
 REM Usage: flash [PORT]    (default: COM3)
 
 set PORT=%~1
