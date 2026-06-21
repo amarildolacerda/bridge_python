@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import logging
 import os
 import time
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -9,6 +10,8 @@ from app.device_registry import DeviceRegistry
 from app.models import DeviceType
 from app.udp_discovery import UDPDiscovery
 from app.websocket_manager import WebSocketManager
+
+LOG = logging.getLogger(__name__)
 
 _start_time = time.monotonic()
 
@@ -46,7 +49,9 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         ip = body.get("ip", "")
         slot = registry.register(device_id, device_type, name, ip)
         if slot == -1:
+            LOG.warning("Registro recusado: %s (limite de %d devices)", device_id, 32)
             return JSONResponse({"status": "error", "message": "registry full"}, status_code=500)
+        LOG.info("Device registrado: %s (%s) como %s em %s", device_id, name, device_type.value, ip or "?")
         ws_manager = request.app.state.ws_manager
         await ws_manager.notify_device_registered(registry.get_device(device_id))
         return {"status": "ok", "slot": slot}
@@ -61,9 +66,11 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         if not device_id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         if registry.remove(device_id):
+            LOG.info("Device removido: %s", device_id)
             ws_manager = request.app.state.ws_manager
             await ws_manager.notify_device_removed(device_id)
             return {"status": "ok"}
+        LOG.warning("Remocao falhou: device %s nao encontrado", device_id)
         return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
 
     @app.post("/api/device/state")
@@ -76,13 +83,17 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         if not device_id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         found = False
+        state_items = {}
         for key, value in body.items():
             if key == "id":
                 continue
+            state_items[key] = value
             if registry.update_state(device_id, key, value):
                 found = True
         if not found:
+            LOG.warning("State update falhou: device %s nao encontrado", device_id)
             return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
+        LOG.info("State recebido de %s: %s", device_id, state_items)
         ws_manager = request.app.state.ws_manager
         dev = registry.get_device(device_id)
         if dev:
@@ -94,6 +105,8 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         if not id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         cmds = registry.get_commands(id)
+        if cmds:
+            LOG.info("Comandos enviados para %s: %s", id, cmds)
         return {"commands": cmds}
 
     @app.post("/api/device/commands")
@@ -106,6 +119,8 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         if not device_id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         cmds = registry.get_commands(device_id)
+        if cmds:
+            LOG.info("Comandos enviados para %s: %s", device_id, cmds)
         return {"commands": cmds}
 
     @app.get("/api/device/info")
@@ -153,13 +168,8 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
             ip = "127.0.0.1"
         return {
             "ip": ip,
-            "gateway": "",
-            "netmask": "",
-            "dns1": "",
-            "dns2": "",
             "version": "v0.1.0",
             "uptime_s": _uptime_s(),
-            "heap_free": 0,
             "total_devices": len(registry.get_all()),
             "hostname": hostname,
         }
@@ -175,11 +185,13 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
         dev = registry.get_device(device_id)
         if not dev:
+            LOG.warning("Heartbeat de device desconhecido: %s", device_id)
             return JSONResponse({"status": "error", "message": "device not found"}, status_code=404)
         dev.last_seen = time.time()
         dev.online = True
         ws_manager = request.app.state.ws_manager
         await ws_manager.notify_device_online(device_id, True)
+        LOG.info("Heartbeat recebido de %s (%s)", device_id, dev.name)
         return {"status": "ok"}
 
     @app.post("/api/gateway/broadcast")
@@ -187,6 +199,7 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         udp = getattr(request.app.state, "udp_discovery", None)
         if udp:
             udp.do_broadcast()
+            LOG.info("Broadcast enviado")
         return {"status": "ok", "message": "broadcast sent"}
 
     @app.post("/api/gateway/reset")

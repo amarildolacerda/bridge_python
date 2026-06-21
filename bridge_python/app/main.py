@@ -5,6 +5,7 @@ import time
 from app.config import settings
 from app.device_registry import DeviceRegistry
 from app.http_api import create_app
+from app.host_monitor import HostMonitor
 from app.mqtt_discovery import MQTTDiscovery
 from app.udp_discovery import UDPDiscovery
 from app.websocket_manager import WebSocketManager
@@ -13,16 +14,17 @@ LOG = logging.getLogger(__name__)
 
 registry = DeviceRegistry(data_dir=settings.data_dir)
 ws_manager = WebSocketManager()
+udp = UDPDiscovery(http_port=settings.http_port)
 app = create_app(registry, ws_manager, udp)
 app.state.ws_manager = ws_manager
 
-udp = UDPDiscovery(http_port=settings.http_port)
 mqtt = MQTTDiscovery(
     host=settings.mqtt_host,
     port=settings.mqtt_port,
     user=settings.mqtt_user,
     password=settings.mqtt_pass,
 )
+host_monitor = HostMonitor(mqtt)
 
 
 async def heartbeat_monitor():
@@ -49,6 +51,7 @@ async def startup():
     for dev in registry.get_all():
         await mqtt.publish_device_config(dev)
     await udp.start()
+    await host_monitor.start()
     asyncio.create_task(heartbeat_monitor())
     asyncio.create_task(mqtt_state_sync())
 

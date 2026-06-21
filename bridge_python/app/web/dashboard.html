@@ -12,7 +12,7 @@
 <div class="hero-card">
 <div class="hero-top">
 <div>
-<p class="eyebrow">ESP32 RainMaker Gateway</p>
+<p class="eyebrow">ESP-HA Gateway</p>
 <h1>Dashboard</h1>
 </div>
 <div class="admin-wrap" id="adminWrap">
@@ -25,21 +25,13 @@
 </div>
 <div class="sub" id="sub">carregando...</div>
 </div>
-<div class="summary-grid">
-<div class="metric"><span class="metric-label">Gateway</span><span class="metric-value" id="metric-ip">—</span></div>
-<div class="metric"><span class="metric-label">Uptime</span><span class="metric-value" id="metric-uptime">—</span></div>
-<div class="metric"><span class="metric-label">Heap livre</span><span class="metric-value" id="metric-heap">—</span></div>
-</div>
+
 </section>
 
 <section class="content">
     <div class="card">
         <h2>Status do Gateway</h2>
-        <div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div>
-<div class="row"><span class="label">Gateway</span><span class="value">—</span></div>
-<div class="row"><span class="label">Máscara</span><span class="value">—</span></div>
-<div class="row"><span class="label">DNS 1</span><span class="value">—</span></div>
-<div class="row"><span class="label">DNS 2</span><span class="value">—</span></div></div>
+        <div id="bridge-info"><div class="row"><span class="label">IP</span><span class="value">—</span></div></div>
     </div>
     <div class="card">
         <h2>Dispositivos <span id="dev-count" style="color:var(--muted-subtle);font-weight:400"></span></h2>
@@ -90,19 +82,12 @@ let b=await infoR.json();
 let d=await devR.json();
 let u=b.uptime_s|0;
 let uptime=''+(u>86400?Math.floor(u/86400)+'d ':'')+Math.floor((u%86400)/3600)+'h'+Math.floor((u%3600)/60)+'m'+u%60+'s';
-document.getElementById('bridge-info').innerHTML=
-'<div class="row"><span class="label">IP</span><span class="value">'+b.ip+'</span></div>'+
-'<div class="row"><span class="label">Gateway</span><span class="value">'+(b.gateway||'—')+'</span></div>'+
-'<div class="row"><span class="label">Máscara</span><span class="value">'+(b.netmask||'—')+'</span></div>'+
-'<div class="row"><span class="label">DNS 1</span><span class="value">'+(b.dns1||'—')+'</span></div>'+
-'<div class="row"><span class="label">DNS 2</span><span class="value">'+(b.dns2||'—')+'</span></div>'+
-'<div class="row"><span class="label">Versão</span><span class="value">'+(b.version||'—')+'</span></div>'+
-'<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>'+
-'<div class="row"><span class="label">Heap livre</span><span class="value">'+(b.heap_free/1024).toFixed(0)+' KB</span></div>';
-document.getElementById('sub').textContent='IP: '+b.ip;
-document.getElementById('metric-ip').textContent=b.ip;
-document.getElementById('metric-uptime').textContent=uptime;
-document.getElementById('metric-heap').textContent=(b.heap_free/1024).toFixed(0)+' KB';
+ document.getElementById('bridge-info').innerHTML=
+ '<div class="row"><span class="label">IP</span><span class="value">'+b.ip+'</span></div>'+
+ '<div class="row"><span class="label">Versão</span><span class="value">'+(b.version||'—')+'</span></div>'+
+ '<div class="row"><span class="label">Uptime</span><span class="value">'+uptime+'</span></div>';
+document.getElementById('sub').textContent=b.hostname||'bridge';
+
 let devs=Array.isArray(d)?d:[];
 let h='';
 let on=0;

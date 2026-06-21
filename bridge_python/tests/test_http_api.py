@@ -161,3 +161,53 @@ class TestHttpAPI:
         resp = await client.get("/dashboard.css")
         assert resp.status_code == 200
         assert "text/css" in resp.headers["content-type"]
+
+    async def test_ha_command_flow(self, client):
+        await client.post("/api/device/register", json={
+            "id": "esp8266_sw", "type": "onoff", "name": "Switch",
+        })
+        resp = await client.post("/api/device/commands", json={"id": "esp8266_sw"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "commands" in data
+        assert isinstance(data["commands"], list)
+
+    async def test_ha_command_get_after_state(self, client):
+        await client.post("/api/device/register", json={
+            "id": "esp8266_sw", "type": "onoff", "name": "Switch",
+        })
+        await client.post("/api/device/state", json={
+            "id": "esp8266_sw", "on": True,
+        })
+        resp = await client.get("/api/device/commands?id=esp8266_sw")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "commands" in data
+        assert data["commands"] == []
+
+    async def test_gateway_info_fields(self, client):
+        resp = await client.get("/api/gateway/info")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ip" in data
+        assert data["ip"]
+        assert "version" in data
+        assert "uptime_s" in data
+        assert data["uptime_s"] >= 0
+        assert "total_devices" in data
+        assert data["total_devices"] >= 0
+        assert "hostname" in data
+        # removed fields should not be present
+        assert "gateway" not in data
+        assert "netmask" not in data
+        assert "dns1" not in data
+        assert "dns2" not in data
+        assert "heap_free" not in data
+
+    async def test_device_info_nonexistent(self, client):
+        resp = await client.get("/api/device/info?id=nonexistent")
+        assert resp.status_code == 404
+
+    async def test_device_info_missing_id(self, client):
+        resp = await client.get("/api/device/info")
+        assert resp.status_code == 400

@@ -37,10 +37,9 @@ def build_device_info(dev: BridgedDevice) -> dict:
     return {
         "identifiers": [f"esp32_bridge_{dev.id}"],
         "name": dev.name,
-        "sw_version": "bridge_python_0.1.0",
-        "manufacturer": "ESP RainMaker Gateway",
+        "sw_version": "bridge_python_v0.0.9",
+        "manufacturer": "ESP-HA Bridge",
         "model": dev.type.value,
-        "via_device": "esp32_bridge",
     }
 
 
@@ -104,6 +103,12 @@ class MQTTDiscovery:
                 port=self._port,
                 username=self._user or None,
                 password=self._password or None,
+                will=aiomqtt.Will(
+                    topic="esp32-bridge/host/availability",
+                    payload="offline",
+                    qos=1,
+                    retain=True,
+                ),
             )
             await self._client.__aenter__()
             self._connected = True
