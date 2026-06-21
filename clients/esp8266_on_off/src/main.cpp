@@ -48,10 +48,16 @@ volatile unsigned long s_last_interrupt = 0;
 
 static bool s_pending_state_sync = false;
 
+static uint16_t s_timer_minutes = 0;
+static unsigned long s_timer_start_ms = 0;
+static bool s_timer_active = false;
+
 static ESP8266WebServer s_server(80);
 
 static void button_isr(void);
 static void send_state(bool force_log = false);
+static void timer_renew(void);
+static void timer_cancel(void);
 
 static const char *get_device_type_string(void)
 {
@@ -72,6 +78,8 @@ static const char *get_device_type_string(void)
 
 #define EEPROM_NAME_ADDR 0
 #define EEPROM_NAME_MAX 48
+#define EEPROM_TIMER_MARKER 64
+#define EEPROM_TIMER_ADDR 65
 
 static void save_device_name(const char *name)
 {
@@ -111,6 +119,29 @@ static void load_device_name(void)
             strncpy(s_device_name, buf, sizeof(s_device_name) - 1);
             s_device_name[sizeof(s_device_name) - 1] = '\0';
         }
+    }
+    EEPROM.end();
+}
+
+static void save_timer(void)
+{
+    EEPROM.begin(128);
+    EEPROM.write(EEPROM_TIMER_MARKER, 0xFD);
+    EEPROM.write(EEPROM_TIMER_ADDR, s_timer_minutes & 0xFF);
+    EEPROM.write(EEPROM_TIMER_ADDR + 1, (s_timer_minutes >> 8) & 0xFF);
+    EEPROM.commit();
+    EEPROM.end();
+}
+
+static void load_timer(void)
+{
+    EEPROM.begin(128);
+    uint8_t marker = EEPROM.read(EEPROM_TIMER_MARKER);
+    if (marker == 0xFD) {
+        uint8_t lo = EEPROM.read(EEPROM_TIMER_ADDR);
+        uint8_t hi = EEPROM.read(EEPROM_TIMER_ADDR + 1);
+        s_timer_minutes = (uint16_t)(lo | (hi << 8));
+        if (s_timer_minutes > 1440) s_timer_minutes = 0;
     }
     EEPROM.end();
 }
@@ -188,6 +219,7 @@ static void send_state(bool force)
     {
         JsonDocument doc;
         doc["id"] = s_device_id;
+        doc["timer"] = s_timer_minutes;
 
         if (strcmp(type, "onoff") == 0)
         {
@@ -280,6 +312,10 @@ static void poll_commands(void)
 #ifdef RELAY_PIN
                 digitalWrite(RELAY_PIN, s_onoff_state ? HIGH : LOW);
 #endif
+                if (s_onoff_state)
+                    timer_renew();
+                else
+                    timer_cancel();
                 send_state(true);
             }
             else if (strcmp(cluster, "levelcontrol") == 0 && strcmp(command, "set_level") == 0)
@@ -579,6 +615,19 @@ static void check_config_portal_timeout(void)
     }
 }
 
+static void timer_renew(void)
+{
+    if (s_timer_minutes > 0) {
+        s_timer_start_ms = millis();
+        s_timer_active = true;
+    }
+}
+
+static void timer_cancel(void)
+{
+    s_timer_active = false;
+}
+
 static void handle_set_onoff(bool new_state)
 {
     s_onoff_state = new_state;
@@ -589,12 +638,74 @@ static void handle_set_onoff(bool new_state)
 
     s_pending_state_sync = true;
 
+    if (s_onoff_state)
+        timer_renew();
+    else
+        timer_cancel();
+
     String json;
     {
         JsonDocument doc;
         doc["status"] = "ok";
         doc["state"] = s_onoff_state;
         serializeJson(doc, json);
+    }
+    s_server.send(200, "application/json", json);
+}
+
+static void handle_api_timer(void)
+{
+    if (!s_server.hasArg("plain"))
+    {
+        s_server.send(400, "application/json", "{\"status\":\"error\",\"msg\":\"no body\"}");
+        return;
+    }
+
+    String body = s_server.arg("plain");
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, body);
+    if (error || !doc.containsKey("minutes"))
+    {
+        s_server.send(400, "application/json", "{\"status\":\"error\",\"msg\":\"invalid json\"}");
+        return;
+    }
+
+    int mins = doc["minutes"].as<int>();
+    if (mins < 0) mins = 0;
+    if (mins > 1440) mins = 1440;
+
+    s_timer_minutes = (uint16_t)mins;
+    save_timer();
+
+    if (mins > 0)
+    {
+        if (!s_onoff_state)
+        {
+            s_onoff_state = true;
+#ifdef RELAY_PIN
+            digitalWrite(RELAY_PIN, HIGH);
+#endif
+            Serial.printf("[%s] Timer set: %d min, turning ON\n", TAG, mins);
+        }
+        else
+        {
+            Serial.printf("[%s] Timer set: %d min, renewing\n", TAG, mins);
+        }
+        timer_renew();
+        send_state(true);
+    }
+    else
+    {
+        timer_cancel();
+        Serial.printf("[%s] Timer disabled\n", TAG);
+    }
+
+    String json;
+    {
+        JsonDocument resp;
+        resp["status"] = "ok";
+        resp["timer"] = s_timer_minutes;
+        serializeJson(resp, json);
     }
     s_server.send(200, "application/json", json);
 }
@@ -620,6 +731,11 @@ static void handle_api_state(void)
         doc["uptime_s"] = (millis() - s_start_time) / 1000;
         if (s_last_send_ms) doc["last_send_s"] = (millis() - s_last_send_ms) / 1000;
         doc["bridge_connected"] = s_bridge_connected;
+        doc["timer"] = s_timer_minutes;
+        if (s_timer_active)
+            doc["timer_remaining_s"] = (s_timer_minutes * 60) - ((millis() - s_timer_start_ms) / 1000);
+        else
+            doc["timer_remaining_s"] = 0;
         serializeJson(doc, json);
     }
     s_server.send(200, "application/json", json);
@@ -645,6 +761,7 @@ static void handle_serial(void)
         digitalWrite(RELAY_PIN, HIGH);
 #endif
         Serial.printf("  Estado: ON\n");
+        timer_renew();
         if (s_bridge_connected)
             send_state(true);
         Serial.printf("-------------------\n\n");
@@ -657,6 +774,7 @@ static void handle_serial(void)
         digitalWrite(RELAY_PIN, LOW);
 #endif
         Serial.printf("  Estado: OFF\n");
+        timer_cancel();
         if (s_bridge_connected)
             send_state(true);
         Serial.printf("--------------------\n\n");
@@ -669,6 +787,10 @@ static void handle_serial(void)
 #endif
         Serial.printf("\n--- Comando: TOGGLE ---\n");
         Serial.printf("  Estado: %s\n", s_onoff_state ? "ON" : "OFF");
+        if (s_onoff_state)
+            timer_renew();
+        else
+            timer_cancel();
         if (s_bridge_connected)
             send_state(true);
         Serial.printf("----------------------\n\n");
@@ -682,6 +804,15 @@ static void handle_serial(void)
         Serial.printf("  Nome:        %s\n", s_device_name);
         Serial.printf("  Tipo:        %s\n", get_device_type_string());
         Serial.printf("  Estado:      %s\n", s_onoff_state ? "ON" : "OFF");
+        if (s_timer_active)
+        {
+            unsigned long remaining = (s_timer_minutes * 60) - ((millis() - s_timer_start_ms) / 1000);
+            Serial.printf("  Timer:       %u min (%lu s remaining)\n", s_timer_minutes, remaining);
+        }
+        else if (s_timer_minutes > 0)
+        {
+            Serial.printf("  Timer:       %u min (awaiting ON)\n", s_timer_minutes);
+        }
         Serial.printf("  Bridge:      %s:%d (%s)\n", s_bridge_host, s_bridge_port,
                       s_bridge_connected ? "conectado" : "desconectado");
         Serial.printf("  Browser:     http://%s\n", WiFi.localIP().toString().c_str());
@@ -737,10 +868,11 @@ void setup(void)
     snprintf(s_device_id, sizeof(s_device_id), "esp8266_%06x", chip_id);
 
     load_device_name();
+    load_timer();
 
     Serial.printf("\n");
     Serial.printf("============================================\n");
-    Serial.printf("  ESP8266 Bridge Client v1.0\n");
+    Serial.printf("  ESP8266 Bridge Client %s\n", FW_VERSION);
     Serial.printf("  Device : %s\n", s_device_id);
     Serial.printf("  Nome   : %s\n", s_device_name);
     Serial.printf("  Tipo   : %s\n", get_device_type_string());
@@ -776,6 +908,7 @@ void setup(void)
     s_server.on("/api/on", HTTP_POST, handle_api_on);
     s_server.on("/api/off", HTTP_POST, handle_api_off);
     s_server.on("/api/toggle", HTTP_POST, handle_api_toggle);
+    s_server.on("/api/timer", HTTP_POST, handle_api_timer);
     s_server.begin();
     Serial.printf("\n  => Browser: http://%s\n", WiFi.localIP().toString().c_str());
     Serial.printf("  => Terminal: 'h' comando de ajuda\n");
@@ -848,6 +981,10 @@ void loop(void)
 #ifdef RELAY_PIN
         digitalWrite(RELAY_PIN, s_onoff_state ? HIGH : LOW);
 #endif
+        if (s_onoff_state)
+            timer_renew();
+        else
+            timer_cancel();
         send_state(true);
     }
 #endif
@@ -863,6 +1000,21 @@ void loop(void)
         s_last_state_update = now;
         read_sensors();
         send_state(true);
+    }
+
+    if (s_timer_active && s_onoff_state)
+    {
+        unsigned long elapsed = millis() - s_timer_start_ms;
+        if (elapsed >= (unsigned long)s_timer_minutes * 60000UL)
+        {
+            s_onoff_state = false;
+#ifdef RELAY_PIN
+            digitalWrite(RELAY_PIN, LOW);
+#endif
+            s_timer_active = false;
+            Serial.printf("[%s] Timer auto-off\n", TAG);
+            send_state(true);
+        }
     }
 
 #ifdef LED_PIN

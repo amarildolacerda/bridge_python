@@ -118,6 +118,21 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         device_id = body.get("id")
         if not device_id:
             return JSONResponse({"status": "error", "message": "missing id"}, status_code=400)
+
+        cmds_to_add = body.get("commands")
+        if cmds_to_add and isinstance(cmds_to_add, list):
+            added = 0
+            for cmd in cmds_to_add:
+                cluster = cmd.get("cluster")
+                command = cmd.get("command")
+                data = cmd.get("data")
+                if cluster and command and data is not None:
+                    if registry.add_command(device_id, cluster, command, str(data)):
+                        added += 1
+            if added:
+                LOG.info("Comandos adicionados para %s: %d", device_id, added)
+            return {"status": True, "added": added}
+
         cmds = registry.get_commands(device_id)
         if cmds:
             LOG.info("Comandos enviados para %s: %s", device_id, cmds)

@@ -1,6 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
+#define FW_VERSION "v0.0.9"
+
 // Device ID é dinâmico: "esp8266_<chip_id>" (gerado via ESP.getChipId() no setup())
 #define DEVICE_NAME "Luz Sala"
 

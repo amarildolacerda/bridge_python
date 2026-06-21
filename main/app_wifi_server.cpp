@@ -627,6 +627,7 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     char id_str[MAX_DEVICE_ID_LEN] = {0};
     char query[256] = {0};
     bool found = false;
+    cJSON *root = NULL;
 
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
     {
@@ -644,7 +645,7 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
         }
     }
 
-    if (!found)
+    if (!found && req->method == HTTP_POST)
     {
         int total_len = req->content_len;
         if (total_len > 0 && total_len < SCRATCH_BUFSIZE)
@@ -660,9 +661,9 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
                         break;
                     cur_len += received;
                 }
-    buf[total_len] = '\0';
+                buf[total_len] = '\0';
 
-    cJSON *root = cJSON_Parse(buf);
+                root = cJSON_Parse(buf);
                 if (root)
                 {
                     cJSON *id_item = cJSON_GetObjectItem(root, "id");
@@ -671,7 +672,6 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
                         strncpy(id_str, id_item->valuestring, sizeof(id_str) - 1);
                         found = true;
                     }
-                    cJSON_Delete(root);
                 }
                 free(buf);
             }
@@ -680,6 +680,7 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
 
     if (!found)
     {
+        if (root) cJSON_Delete(root);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing device id");
         return ESP_FAIL;
     }
@@ -687,9 +688,46 @@ static esp_err_t device_commands_handler(httpd_req_t *req)
     bridged_device_t *dev = device_registry_get_by_id(id_str);
     if (!dev)
     {
+        if (root) cJSON_Delete(root);
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "device not found");
         return ESP_FAIL;
     }
+
+    if (req->method == HTTP_POST && root)
+    {
+        cJSON *cmds = cJSON_GetObjectItem(root, "commands");
+        if (cmds && cJSON_IsArray(cmds))
+        {
+            int added = 0;
+            int arr_size = cJSON_GetArraySize(cmds);
+            for (int i = 0; i < arr_size; i++)
+            {
+                cJSON *cmd = cJSON_GetArrayItem(cmds, i);
+                if (!cmd) continue;
+                cJSON *cluster = cJSON_GetObjectItem(cmd, "cluster");
+                cJSON *command = cJSON_GetObjectItem(cmd, "command");
+                cJSON *data = cJSON_GetObjectItem(cmd, "data");
+                if (cluster && cluster->valuestring && command && command->valuestring && data && data->valuestring)
+                {
+                    if (device_registry_add_command(id_str, cluster->valuestring, command->valuestring, data->valuestring) == ESP_OK)
+                        added++;
+                }
+            }
+            cJSON_Delete(root);
+
+            httpd_resp_set_type(req, "application/json");
+            cJSON *resp = cJSON_CreateObject();
+            cJSON_AddBoolToObject(resp, "status", true);
+            cJSON_AddNumberToObject(resp, "added", added);
+            const char *resp_str = cJSON_Print(resp);
+            httpd_resp_sendstr(req, resp_str);
+            free((void *)resp_str);
+            cJSON_Delete(resp);
+            return ESP_OK;
+        }
+    }
+
+    if (root) cJSON_Delete(root);
 
     pending_command_t commands[MAX_PENDING_COMMANDS];
     int count = device_registry_get_commands(id_str, commands, MAX_PENDING_COMMANDS);

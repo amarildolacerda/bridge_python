@@ -95,7 +95,7 @@ for(let dev of devs){
 if(dev.online)on++;
 let st=dev.state||{};
 let stHtml='';
-if('on' in st)stHtml='<span class="'+(st.on?'state-on':'state-off')+'">'+(st.on?'LIGADO':'DESLIGADO')+'</span>';
+if('on' in st)stHtml='<span class="'+(st.on?'state-on':'state-off')+'" style="cursor:pointer" onclick="toggleDevice(\''+dev.id+'\','+st.on+')">'+(st.on?'LIGADO':'DESLIGADO')+'</span>';
 else if('temperature' in st)stHtml=st.temperature.toFixed(1)+'\u00B0C '+(st.humidity!=null?st.humidity.toFixed(0)+'%':'');
 else if('contact' in st)stHtml=st.contact?'ABERTO':'FECHADO';
 else if('occupancy' in st)stHtml=st.occupancy?'MOVIMENTO':'LIVRE';
@@ -116,6 +116,12 @@ h+='<div class="device">'+
 document.getElementById('devices').innerHTML=h||'<div class="empty">Nenhum dispositivo registrado</div>';
 document.getElementById('dev-count').textContent='('+on+'/'+devs.length+' online)';
 }catch(e){document.getElementById('bridge-info').innerHTML='<div class="row"><span class="label" style="color:var(--danger)">Erro de conexão</span></div>';document.getElementById('devices').innerHTML='<div class="empty" style="color:var(--danger)">Erro ao carregar dispositivos</div>'}
+}
+async function toggleDevice(id,currentOn){
+try{
+await fetch('/api/device/commands',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,commands:[{cluster:'onoff',command:'set_onoff',data:currentOn?'0':'1'}]})});
+toast('Comando enviado para '+id);
+}catch(e){toast('Erro ao enviar comando',true)}
 }
 load();setInterval(load,10000);
 </script>
