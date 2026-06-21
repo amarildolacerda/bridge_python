@@ -67,6 +67,9 @@ def build_entity_config(
         config["device_class"] = device_class
     if icon:
         config["icon"] = icon
+    if platform == "binary_sensor":
+        config["payload_on"] = "true"
+        config["payload_off"] = "false"
     if platform in ("switch", "light"):
         config["command_topic"] = f"{base_topic}/set"
         config["payload_on"] = "true"
