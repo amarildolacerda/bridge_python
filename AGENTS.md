@@ -6,7 +6,7 @@
 - a atualizao do "dev" para "main" so pode ser feito se solicitado ou pegar autorização
 - `main-v0.0.3` — backup do main anterior (antes do reset para dev)
 - antes de passar o dev para main gerar um branch do main_vx.x.x
-- quando gerar uma nova tag (ex: v0.0.7) tornar a versão a mesma da tag (target_compile_definitions(${COMPONENT_LIB} PRIVATE FW_VERSION="v0.0.7"))
+- quando gerar uma nova tag (ex: v0.0.7) tornar a versão a mesma da tag em todos os bridges (C + Python) e clients ESP8266 (FW_VERSION)
 - procurar por .git_token a ser usado com git
 
 ## Ambiente
@@ -88,6 +88,8 @@ git clone --recursive -b v1.8.2 https://github.com/espressif/esp-rainmaker.git ~
 10. Clients respondem a `re_register:true` no UDP registrando novamente via HTTP POST `/api/device/register`
 11. Bridge broadcast (`b`): envia `re_register:true` via UDP, clients re-registram via HTTP, mostra registrados + descobertos
 12. Dashboard web tem card QR code do RainMaker em `/api/qrcode`
+13. Versão (tag) vale para bridge C, bridge Python e clients ESP8266 — todos devem ter a mesma FW_VERSION
+14. Toda implementação adicionada no bridge C (main/) deve ser replicada no bridge Python (bridge_python/) e vice-versa
 
 ## Regras de AI
 0. economizar tokens com respostas minimas sem explicações desnecessaria 
