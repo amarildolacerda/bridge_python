@@ -112,6 +112,7 @@ static bool http_post(const char *path, const String &body)
 {
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + path);
     s_http.addHeader("Content-Type", "application/json");
+    s_http.addHeader("Connection", "close");
     s_http.setTimeout(5000);
     int code = s_http.POST(body);
     bool ok = (code == 200);
@@ -558,8 +559,10 @@ static void handle_api_state(void)
     String json;
     {
         JsonDocument doc;
-        doc["temperature"] = s_temperature;
-        doc["humidity"] = s_humidity;
+        if (s_dht_valid) {
+            doc["temperature"] = s_temperature;
+            doc["humidity"] = s_humidity;
+        }
         doc["gas_level"] = s_gas_level;
         doc["alarm"] = s_alarm;
         doc["battery"] = s_battery;
@@ -724,7 +727,7 @@ void setup(void)
 
     Serial.printf("\n");
     Serial.printf("============================================\n");
-    Serial.printf("  ESP8266 DHT22 + MQ-2 v1.0\n");
+    Serial.printf("  ESP8266 DHT22 + MQ-2 " FW_VERSION "\n");
     Serial.printf("  Device: %s\n", s_device_id);
     Serial.printf("  Nome:   %s\n", s_device_name);
     Serial.printf("  Temp:   %s\n", s_device_id_temp);

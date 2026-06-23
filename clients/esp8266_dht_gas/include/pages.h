@@ -52,8 +52,8 @@ async function fetchState(){
 try{
 const r=await fetch('/api/state');const d=await r.json();
 ipEl.textContent='http://'+d.ip;
-tempEl.textContent=d.temperature.toFixed(1)+'\u00B0C';
-humEl.textContent=d.humidity.toFixed(1)+'%';
+tempEl.textContent=d.temperature!=null?d.temperature.toFixed(1)+'\u00B0C':'--.-°C';
+humEl.textContent=d.humidity!=null?d.humidity.toFixed(1)+'%':'--.-%';
 const lvl=d.gas_level|0;
 glEl.textContent=lvl+'%';
 if(lvl>=30){glEl.className='valor-gas alarm';abEl.textContent='\u26A0 VAZAMENTO';abEl.className='alarm-badge danger'}
