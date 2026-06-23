@@ -54,6 +54,9 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         LOG.info("Device registrado: %s (%s) como %s em %s", device_id, name, device_type.value, ip or "?")
         ws_manager = request.app.state.ws_manager
         await ws_manager.notify_device_registered(registry.get_device(device_id))
+        mqtt = getattr(request.app.state, "mqtt", None)
+        if mqtt:
+            await mqtt.publish_device_config(registry.get_device(device_id))
         return {"status": "ok", "slot": slot}
 
     @app.post("/api/device/remove")

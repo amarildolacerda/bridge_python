@@ -58,13 +58,11 @@ pio device monitor
 
 ## API local (no ESP8266)
 
-| Rota              | Método | Descrição                                         |
-|-------------------|--------|---------------------------------------------------|
-| `/`               | GET    | Dashboard web                                     |
-| `/api/state`      | GET    | Estado atual (temperature, humidity, gas_level, alarm) |
-| `/api/pin?gpio=N` | GET    | Estado digital do pino GPIO N                     |
-| `/api/pin`        | POST   | Controla pino: `{"gpio":N,"state":1|0}`           |
-| `/api/ota`        | POST   | Upload de firmware via OTA (multipart)            |
+| Rota         | Método | Descrição                                         |
+|--------------|--------|---------------------------------------------------|
+| `/`          | GET    | Dashboard web                                     |
+| `/api/state` | GET    | Estado atual (temperature, humidity, gas_level, alarm) |
+| `/api/ota`   | POST   | Upload de firmware via OTA (multipart)            |
 
 ## API bridge
 

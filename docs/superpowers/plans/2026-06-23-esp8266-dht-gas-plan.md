@@ -1,3 +1,192 @@
+# ESP8266 DHT22 + MQ-2 Client Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan.
+
+**Goal:** Create ESP8266 client combining DHT22 (temp/hum) + MQ-2 (gas) sensors registering two separate devices on the bridge.
+
+**Architecture:** Single ESP8266 running Arduino framework, starts HTTP server + UDP listener, discovers bridge via UDP, registers two devices (`temperature` + `gas`), sends state for each independently.
+
+**Tech Stack:** ESP8266, Arduino framework, PlatformIO, ArduinoJson 7, WiFiManager 2, DHT sensor library
+
+## Global Constraints
+
+- Device IDs: `esp8266_<chip_id>_temp` and `esp8266_<chip_id>_gas`
+- Base ID `esp8266_<chip_id>` used for discovery UDP
+- DHT22 on GPIO 4, MQ-2 analog on A0, MQ-2 digital on GPIO 16
+- LED status on GPIO 2, LED alerta on GPIO 14, LED alarme on GPIO 12
+- BRIDGE_HOST = "0.0.0.0" (UDP discovery only, no fallback)
+- EEPROM: 128 bytes, marker 0xFF at addr 0, device name at addrs 1-48
+- cJSON copy rule (not applicable — using ArduinoJson)
+- Follow existing client patterns exactly (esp8266_gas, esp8266_dht21)
+
+---
+### Task 1: Project scaffold
+
+**Files:**
+- Create: `clients/esp8266_dht_gas/platformio.ini`
+- Create: `clients/esp8266_dht_gas/include/config.h`
+
+**Interfaces:**
+- Consumes: nothing
+- Produces: build config + pin/interval definitions used by all following tasks
+
+- [ ] **Step 1: Create platformio.ini**
+
+Create `clients/esp8266_dht_gas/platformio.ini`:
+```ini
+[env:esp8266]
+platform = espressif8266
+board = nodemcuv2
+framework = arduino
+monitor_speed = 115200
+lib_deps =
+    bblanchon/ArduinoJson@^7.3.1
+    tzapu/WiFiManager@^2.0.0
+    adafruit/DHT sensor library@^1.4.6
+```
+
+- [ ] **Step 2: Create config.h**
+
+Create `clients/esp8266_dht_gas/include/config.h`:
+```cpp
+#pragma once
+#include <Arduino.h>
+
+#define DEVICE_NAME "DHT + Gas"
+
+#define STATE_UPDATE_INTERVAL 5000
+#define STATE_SEND_THRESHOLD_TEMP 0.5
+#define STATE_SEND_THRESHOLD_HUM 3.0
+#define STATE_SEND_THRESHOLD_GAS 5
+#define STATE_FORCE_INTERVAL 300000
+#define HEARTBEAT_INTERVAL 60000
+#define TELEMETRY_INTERVAL 30000
+
+#define DISCOVERY_PORT 5000
+#define DISCOVERY_TIMEOUT 30000
+
+#define BRIDGE_HOST "0.0.0.0"
+#define BRIDGE_PORT 80
+
+#define DHT_PIN 4
+#define DHT_TYPE DHT22
+#define GAS_ANALOG_PIN A0
+#define GAS_DIGITAL_PIN 16
+
+#define LED_PIN 2
+#define GAS_LED_ALERT_PIN 14
+#define GAS_LED_ALARM_PIN 12
+
+#define GAS_ALERT_THRESHOLD 15
+#define GAS_ALARM_THRESHOLD 30
+#define NORMAL_PULSE_MS 500
+#define ALARM_BLINK_FAST_MS 200
+#define ALARM_BLINK_SLOW_MS 1000
+#define LED_BLINK_WIFI_MS 200
+#define LED_BLINK_BRIDGE_MS 2000
+```
+
+---
+### Task 2: Dashboard HTML
+
+**Files:**
+- Create: `clients/esp8266_dht_gas/include/pages.h`
+
+**Interfaces:**
+- Consumes: nothing (standalone HTML)
+- Produces: `PAGE_DASHBOARD` PROGMEM string used by `handle_root()`
+
+- [ ] **Step 1: Create pages.h**
+
+Create `clients/esp8266_dht_gas/include/pages.h` with combined dashboard showing temperature, humidity, and gas level, following the dark theme pattern from existing clients:
+
+```cpp
+#pragma once
+
+static const char PAGE_DASHBOARD[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DHT + Gas</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#010102;color:#f7f8f8;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#0f1011;border-radius:12px;padding:24px;text-align:center;max-width:360px;width:90%;border:1px solid #23252a}
+h1{font-size:1.3rem;color:#5e6ad2;margin-bottom:4px}
+.ip-badge{background:#141516;color:#8a8f98;font-size:.75rem;padding:3px 10px;border-radius:12px;display:inline-block;margin-bottom:12px;font-family:monospace}
+.valor-sensor{font-size:2.5rem;margin:.25rem 0;color:#f7f8f8}
+.label{color:#8a8f98;font-size:.85rem;margin-bottom:4px}
+.valor-gas{font-size:2.5rem;margin:.25rem 0;transition:color .3s}
+.valor-gas.safe{color:#27a644}
+.valor-gas.warn{color:#f5a623}
+.valor-gas.alarm{color:#e5484d}
+.alarm-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:.8rem;font-weight:700;margin-top:4px;margin-bottom:8px;transition:background .3s}
+.alarm-badge.safe{background:rgba(39,166,68,0.15);color:#27a644}
+.alarm-badge.alert{background:rgba(255,152,0,0.15);color:#f5a623}
+.alarm-badge.danger{background:rgba(229,72,77,0.15);color:#e5484d}
+.divider{border:none;border-top:1px solid #23252a;margin:16px 0}
+.info{color:#62666d;font-size:.8rem;margin-top:16px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>DHT + Gas</h1>
+<div class="ip-badge" id="ipBadge">http://--.---.---.---</div>
+<div class="label">Temperatura</div>
+<div class="valor-sensor" id="temp">--.-°C</div>
+<div class="label">Umidade</div>
+<div class="valor-sensor" id="humid">--.-%</div>
+<hr class="divider">
+<div class="label">Nivel de Gas</div>
+<div class="valor-gas safe" id="gasLevel">---%</div>
+<div class="alarm-badge safe" id="alarmBadge">Seguro</div>
+<div class="info" id="info"></div>
+</div>
+<script>
+const ipEl=document.getElementById('ipBadge');
+const tempEl=document.getElementById('temp');
+const humEl=document.getElementById('humid');
+const glEl=document.getElementById('gasLevel');
+const abEl=document.getElementById('alarmBadge');
+const inf=document.getElementById('info');
+async function fetchState(){
+try{
+const r=await fetch('/api/state');const d=await r.json();
+ipEl.textContent='http://'+d.ip;
+tempEl.textContent=d.temperature.toFixed(1)+'\u00B0C';
+humEl.textContent=d.humidity.toFixed(1)+'%';
+const lvl=d.gas_level|0;
+glEl.textContent=lvl+'%';
+if(lvl>=30){glEl.className='valor-gas alarm';abEl.textContent='\u26A0 VAZAMENTO';abEl.className='alarm-badge danger'}
+else if(lvl>=15){glEl.className='valor-gas warn';abEl.textContent='Atencao';abEl.className='alarm-badge alert'}
+else{glEl.className='valor-gas safe';abEl.textContent='Seguro';abEl.className='alarm-badge safe'}
+let u=d.uptime_s|0,upt=Math.floor(u/86400)+'d '+Math.floor((u%86400)/3600)+'h '+Math.floor((u%3600)/60)+'m '+u%60+'s';
+let ls=d.last_send_s;let lastSend=ls==null?'nunca':ls<60?ls+'s':ls<3600?Math.floor(ls/60)+'m':Math.floor(ls/3600)+'h';
+inf.innerHTML='RSSI: '+d.rssi+'dBm | Up: '+upt+'<br>Ultima coleta: '+lastSend;
+}catch{glEl.textContent='\u26A0';glEl.className='valor-gas alarm';inf.textContent='Erro de conex\u00E3o'}
+}
+fetchState();setInterval(fetchState,3000)
+</script>
+</body>
+</html>
+)rawliteral";
+```
+
+---
+### Task 3: Main firmware
+
+**Files:**
+- Create: `clients/esp8266_dht_gas/src/main.cpp`
+
+**Interfaces:**
+- Consumes: `config.h` (defines), `pages.h` (dashboard HTML)
+- Produces: Complete ESP8266 firmware
+
+- [ ] **Step 1: Write includes, tag, globals**
+
+```cpp
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -52,12 +241,20 @@ static bool s_wifi_configuration_mode = false;
 static unsigned long s_wifi_config_start_time = 0;
 
 static ESP8266WebServer s_server(80);
+```
 
+- [ ] **Step 2: Write get_device_type_string**
+
+```cpp
 static const char *get_device_type_string(bool gas)
 {
     return gas ? "gas" : "temperature";
 }
+```
 
+- [ ] **Step 3: Write EEPROM functions** (identical to existing pattern)
+
+```cpp
 #define EEPROM_NAME_ADDR 0
 #define EEPROM_NAME_MAX 48
 
@@ -107,12 +304,15 @@ static void load_device_name(void)
     }
     EEPROM.end();
 }
+```
 
+- [ ] **Step 4: Write http_post**
+
+```cpp
 static bool http_post(const char *path, const String &body)
 {
     s_http.begin(s_wifi, String("http://") + s_bridge_host + ":" + s_bridge_port + path);
     s_http.addHeader("Content-Type", "application/json");
-    s_http.addHeader("Connection", "close");
     s_http.setTimeout(5000);
     int code = s_http.POST(body);
     bool ok = (code == 200);
@@ -129,7 +329,11 @@ static bool http_post(const char *path, const String &body)
     s_http.end();
     return ok;
 }
+```
 
+- [ ] **Step 5: Write register_device (registers both devices)**
+
+```cpp
 static bool register_device(void)
 {
     bool ok = true;
@@ -175,7 +379,11 @@ static bool register_device(void)
     }
     return ok;
 }
+```
 
+- [ ] **Step 6: Write send_heartbeat (sends 2 heartbeats)**
+
+```cpp
 static void send_heartbeat(void)
 {
     if (!s_bridge_discovered || !s_bridge_connected) return;
@@ -193,7 +401,11 @@ static void send_heartbeat(void)
     s_http.POST(body);
     s_http.end();
 }
+```
 
+- [ ] **Step 7: Write send_state (sends state for both devices)**
+
+```cpp
 static void send_state(bool force)
 {
     if (!s_bridge_discovered || !s_bridge_connected) return;
@@ -247,7 +459,11 @@ static void send_state(bool force)
         }
     }
 }
+```
 
+- [ ] **Step 8: Write maintain_bridge_discovery** (identical to existing pattern, using `s_device_id` as base ID in discovery messages)
+
+```cpp
 static void maintain_bridge_discovery(void)
 {
     unsigned long now = millis();
@@ -315,7 +531,11 @@ static void maintain_bridge_discovery(void)
         }
     }
 }
+```
 
+- [ ] **Step 9: Write discover_bridge** (identical to existing pattern, using `s_device_id`)
+
+```cpp
 static bool discover_bridge(void)
 {
     JsonDocument req;
@@ -370,7 +590,11 @@ static bool discover_bridge(void)
     Serial.printf("[%s] Bridge discovery timeout, no fallback IP configured\n", TAG);
     return false;
 }
+```
 
+- [ ] **Step 10: Write wifi_setup** (identical to existing pattern)
+
+```cpp
 static bool wifi_setup(bool force_config_portal = false)
 {
     WiFiManager wifiManager;
@@ -426,7 +650,11 @@ static bool wifi_setup(bool force_config_portal = false)
     s_wifi_configuration_mode = false;
     return false;
 }
+```
 
+- [ ] **Step 11: Write maintain_wifi_connection** (identical to existing pattern)
+
+```cpp
 static void maintain_wifi_connection(void)
 {
     if (WiFi.status() == WL_CONNECTED)
@@ -456,7 +684,11 @@ static void maintain_wifi_connection(void)
         wifi_setup(true);
     }
 }
+```
 
+- [ ] **Step 12: Write read_sensors** (merged DHT + gas)
+
+```cpp
 static void read_sensors(void)
 {
     // DHT
@@ -496,7 +728,11 @@ static void read_sensors(void)
         s_battery = max(0, s_battery - 1);
     }
 }
+```
 
+- [ ] **Step 13: Write init_hardware** (includes DHT pin detection from dht21 client)
+
+```cpp
 static int detect_dht_pin(void)
 {
     const int candidates[] = {DHT_PIN, 4, 12, 13, 14, 0, 2, 15};
@@ -539,7 +775,11 @@ static void init_hardware(void)
     digitalWrite(LED_PIN, LOW);
 #endif
 }
+```
 
+- [ ] **Step 14: Write check_config_portal_timeout**
+
+```cpp
 static void check_config_portal_timeout(void)
 {
     if (s_wifi_configuration_mode && (millis() - s_wifi_config_start_time > 600000))
@@ -548,7 +788,11 @@ static void check_config_portal_timeout(void)
         ESP.restart();
     }
 }
+```
 
+- [ ] **Step 15: Write handle_root and handle_api_state**
+
+```cpp
 static void handle_root(void)
 {
     s_server.send(200, "text/html", FPSTR(PAGE_DASHBOARD));
@@ -559,15 +803,11 @@ static void handle_api_state(void)
     String json;
     {
         JsonDocument doc;
-        if (s_dht_valid) {
-            doc["temperature"] = s_temperature;
-            doc["humidity"] = s_humidity;
-        }
+        doc["temperature"] = s_temperature;
+        doc["humidity"] = s_humidity;
         doc["gas_level"] = s_gas_level;
         doc["alarm"] = s_alarm;
         doc["battery"] = s_battery;
-        doc["dht_pin"] = s_dht_pin;
-        doc["dht_valid"] = s_dht_valid;
         doc["device_id"] = s_device_id;
         doc["device_name"] = s_device_name;
         doc["bridge_connected"] = s_bridge_connected;
@@ -575,69 +815,15 @@ static void handle_api_state(void)
         doc["rssi"] = WiFi.RSSI();
         doc["uptime_s"] = (millis() - s_start_time) / 1000;
         if (s_last_send_ms) doc["last_send_s"] = (millis() - s_last_send_ms) / 1000;
-        doc["gas_analog_pin"] = GAS_ANALOG_PIN;
-        doc["gas_digital_pin"] = GAS_DIGITAL_PIN;
-        doc["led_pin"] = LED_PIN;
-        doc["gas_led_alert_pin"] = GAS_LED_ALERT_PIN;
-        doc["gas_led_alarm_pin"] = GAS_LED_ALARM_PIN;
-        doc["raw_analog"] = analogRead(GAS_ANALOG_PIN);
-        doc["gas_digital"] = digitalRead(GAS_DIGITAL_PIN);
-        doc["led_state"] = digitalRead(LED_PIN);
-        doc["alert_led_state"] = digitalRead(GAS_LED_ALERT_PIN);
-        doc["alarm_led_state"] = digitalRead(GAS_LED_ALARM_PIN);
         serializeJson(doc, json);
     }
     s_server.send(200, "application/json", json);
 }
+```
 
-static void handle_api_pin(void)
-{
-    if (s_server.method() == HTTP_GET)
-    {
-        int pin = s_server.arg("gpio").toInt();
-        pinMode(pin, INPUT_PULLUP);
-        int state = digitalRead(pin);
-        String json;
-        JsonDocument doc;
-        doc["gpio"] = pin;
-        doc["state"] = state;
-        serializeJson(doc, json);
-        s_server.send(200, "application/json", json);
-    }
-    else if (s_server.method() == HTTP_POST)
-    {
-        String body = s_server.arg("plain");
-        JsonDocument doc;
-        DeserializationError err = deserializeJson(doc, body);
-        if (err)
-        {
-            s_server.send(400, "application/json", "{\"error\":\"invalid JSON\"}");
-            return;
-        }
-        int pin = doc["gpio"] | -1;
-        if (pin < 0 || pin > 16)
-        {
-            s_server.send(400, "application/json", "{\"error\":\"invalid gpio\"}");
-            return;
-        }
-        int state = doc["state"] | -1;
-        if (state != 0 && state != 1)
-        {
-            s_server.send(400, "application/json", "{\"error\":\"state must be 0 or 1\"}");
-            return;
-        }
-        pinMode(pin, OUTPUT);
-        digitalWrite(pin, state);
-        String json;
-        JsonDocument resp;
-        resp["gpio"] = pin;
-        resp["state"] = state;
-        resp["status"] = "ok";
-        serializeJson(resp, json);
-        s_server.send(200, "application/json", json);
-    }
-}
+- [ ] **Step 16: Write handle_serial** (combined commands from dht21 + gas)
 
+```cpp
 static void handle_serial(void)
 {
     if (Serial.available() <= 0)
@@ -733,9 +919,12 @@ static void handle_serial(void)
         Serial.printf("---------------\n\n");
         break;
     }
-    }
 }
+```
 
+- [ ] **Step 17: Write handle_ota and handle_ota_upload**
+
+```cpp
 static void handle_ota(void)
 {
     if (!Update.hasError())
@@ -772,7 +961,11 @@ static void handle_ota_upload(void)
             Update.printError(Serial);
     }
 }
+```
 
+- [ ] **Step 18: Write setup**
+
+```cpp
 void setup(void)
 {
     Serial.begin(115200);
@@ -788,7 +981,7 @@ void setup(void)
 
     Serial.printf("\n");
     Serial.printf("============================================\n");
-    Serial.printf("  ESP8266 DHT22 + MQ-2 " FW_VERSION "\n");
+    Serial.printf("  ESP8266 DHT22 + MQ-2 v1.0\n");
     Serial.printf("  Device: %s\n", s_device_id);
     Serial.printf("  Nome:   %s\n", s_device_name);
     Serial.printf("  Temp:   %s\n", s_device_id_temp);
@@ -811,7 +1004,6 @@ void setup(void)
 
     s_server.on("/", handle_root);
     s_server.on("/api/state", handle_api_state);
-    s_server.on("/api/pin", handle_api_pin);
     s_server.on("/api/ota", HTTP_POST, handle_ota, handle_ota_upload);
     s_server.begin();
 
@@ -843,7 +1035,11 @@ void setup(void)
     Serial.printf("  Pronto! Pressione 'h' para ajuda\n");
     Serial.printf("============================================\n\n");
 }
+```
 
+- [ ] **Step 19: Write loop**
+
+```cpp
 void loop(void)
 {
     handle_serial();
@@ -968,3 +1164,23 @@ void loop(void)
 
     delay(1);
 }
+```
+
+---
+### Task 4: README
+
+**Files:**
+- Create: `clients/esp8266_dht_gas/README.md`
+
+- [ ] **Step 1: Create README.md**
+
+Create `clients/esp8266_dht_gas/README.md` with:
+- Title: "ESP8266 DHT22 + MQ-2 Client"
+- Hardware pin table (DHT22 GPIO4, MQ-2 analog A0, MQ-2 digital GPIO16, LED status GPIO2, LED alerta GPIO14, LED alarme GPIO12)
+- Features list (temp, humidity, gas, alarm, OTA, dashboard, WiFiManager, serial commands)
+- Build instructions (`pio run -t upload`)
+- API local routes (`/`, `/api/state`, `/api/ota`)
+- Bridge types registered: `"temperature"` and `"gas"`
+- State format for each device type
+- Serial commands table (l, s, r, u, h/?)
+- Dependencies (ArduinoJson, WiFiManager, DHT sensor library)

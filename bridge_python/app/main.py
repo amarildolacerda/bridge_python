@@ -24,6 +24,7 @@ mqtt = MQTTDiscovery(
     user=settings.mqtt_user,
     password=settings.mqtt_pass,
 )
+app.state.mqtt = mqtt
 host_monitor = HostMonitor(mqtt)
 
 

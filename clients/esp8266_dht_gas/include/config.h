@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 #define FW_VERSION "v0.0.9"
-#define DEVICE_NAME "DHT + Gas"
+#define DEVICE_NAME "Alert Sensor"
 
 #define STATE_UPDATE_INTERVAL 5000
 #define STATE_SEND_THRESHOLD_TEMP 0.5
@@ -24,8 +24,8 @@
 #define GAS_DIGITAL_PIN 16
 
 #define LED_PIN 2
-#define GAS_LED_ALERT_PIN 14
-#define GAS_LED_ALARM_PIN 12
+#define GAS_LED_ALERT_PIN 12
+#define GAS_LED_ALARM_PIN 5
 
 #define GAS_ALERT_THRESHOLD 15
 #define GAS_ALARM_THRESHOLD 30
