@@ -673,6 +673,7 @@ static void handle_serial(void)
         Serial.printf("---------------\n\n");
         break;
     }
+    }
 }
 
 static void handle_ota(void)
