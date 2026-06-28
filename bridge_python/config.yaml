@@ -1,5 +1,5 @@
 name: "ESP32 Bridge Python"
-version: "0.1.0"
+version: "0.0.10"
 slug: "esp32_bridge_python"
 description: "ESP32 Bridge clone for Home Assistant with MQTT Discovery"
 url: "https://github.com/anomalyco/bridge"
@@ -12,6 +12,8 @@ arch:
 startup: "application"
 boot: "auto"
 init: false
+map:
+  - config:rw
 ports:
   80/tcp: 8080
   5000/udp: 5000
