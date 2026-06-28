@@ -2,7 +2,7 @@ name: "ESP32 Bridge Python"
 version: "0.0.10"
 slug: "esp32_bridge_python"
 description: "ESP32 Bridge clone for Home Assistant with MQTT Discovery"
-url: "https://github.com/anomalyco/bridge"
+url: "https://github.com/amarildolacerda/bridge"
 arch:
   - armhf
   - armv7
@@ -15,11 +15,11 @@ init: false
 map:
   - config:rw
 ports:
-  80/tcp: 8080
-  5000/udp: 5000
+  "80/tcp": 8080
+  "5000/udp": 5000
 ports_description:
-  80/tcp: "HTTP API + Web Dashboard"
-  5000/udp: "UDP Device Discovery"
+  "80/tcp": "HTTP API + Web Dashboard"
+  "5000/udp": "UDP Device Discovery"
 options:
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
