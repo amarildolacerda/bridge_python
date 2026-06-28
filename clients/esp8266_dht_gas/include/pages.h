@@ -29,7 +29,7 @@ h1{font-size:1.3rem;color:#5e6ad2;margin-bottom:4px}
 </head>
 <body>
 <div class="card">
-<h1>DHT + Gas</h1>
+<h1>Temp & Gas</h1>
 <div class="ip-badge" id="ipBadge">http://--.---.---.---</div>
 <div class="label">Temperatura</div>
 <div class="valor-sensor" id="temp">--.-°C</div>

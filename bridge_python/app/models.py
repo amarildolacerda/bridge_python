@@ -16,6 +16,7 @@ class DeviceType(str, Enum):
     GAS = "gas"
     RAIN = "rain"
     ELECTRICITY = "electricity"
+    BRIDGE = "bridge"
     UNKNOWN = "unknown"
 
     @classmethod

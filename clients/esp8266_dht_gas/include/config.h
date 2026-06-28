@@ -2,7 +2,8 @@
 #include <Arduino.h>
 
 #define FW_VERSION "v0.0.10"
-#define DEVICE_NAME "Alert Sensor"
+#define DEVICE_NAME "Temperature Sensor"
+#define DEVICE_NAME_GAS "Gas Sensor"
 
 #define STATE_UPDATE_INTERVAL 5000
 #define STATE_SEND_THRESHOLD_TEMP 0.5

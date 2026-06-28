@@ -6,6 +6,9 @@ import time
 from app.models import BridgedDevice, DeviceType
 
 MAX_DEVICES = 32
+STALE_DAYS = 1  # Remove devices that haven't sent data for this many days
+
+LOG = logging.getLogger(__name__)
 
 
 class DeviceRegistry:
@@ -13,6 +16,7 @@ class DeviceRegistry:
         self._devices: dict[str, BridgedDevice] = {}
         self._data_dir = data_dir
         self._file_path = os.path.join(data_dir, "devices.json")
+        self._last_cleanup = time.time()
 
     def register(
         self, device_id: str, device_type: DeviceType, name: str, ip: str
@@ -55,7 +59,24 @@ class DeviceRegistry:
         dev.state[key] = value
         dev.last_seen = time.time()
         dev.online = True
+        self._maybe_cleanup()
         return True
+
+    def _maybe_cleanup(self):
+        now = time.time()
+        if now - self._last_cleanup < 3600:  # Run cleanup max once per hour
+            return
+        self._last_cleanup = now
+        stale_threshold = STALE_DAYS * 86400
+        to_remove = []
+        for device_id, dev in self._devices.items():
+            if (now - dev.last_seen) > stale_threshold:
+                to_remove.append(device_id)
+        for device_id in to_remove:
+            LOG.info("Removendo device inativo há mais de %d dia(s): %s", STALE_DAYS, device_id)
+            self._devices.pop(device_id, None)
+        if to_remove:
+            self.save()
 
     def add_command(self, device_id: str, cluster: str, command: str, data: str) -> bool:
         dev = self._devices.get(device_id)
@@ -89,6 +110,20 @@ class DeviceRegistry:
         for dev in self._devices.values():
             if dev.online and (now - dev.last_seen) > timeout:
                 dev.online = False
+        self._cleanup_stale()
+
+    def _cleanup_stale(self):
+        now = time.time()
+        stale_threshold = STALE_DAYS * 86400
+        to_remove = []
+        for device_id, dev in self._devices.items():
+            if (now - dev.last_seen) > stale_threshold:
+                to_remove.append(device_id)
+        for device_id in to_remove:
+            LOG.info("Removendo device inativo há mais de %d dia(s): %s", STALE_DAYS, device_id)
+            self._devices.pop(device_id, None)
+        if to_remove:
+            self.save()
 
     def save(self):
         os.makedirs(self._data_dir, exist_ok=True)

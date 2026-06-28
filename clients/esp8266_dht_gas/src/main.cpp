@@ -41,6 +41,7 @@ static char s_device_id[32];
 static char s_device_id_temp[40];
 static char s_device_id_gas[40];
 static char s_device_name[48] = DEVICE_NAME;
+static char s_device_name_gas[48] = DEVICE_NAME_GAS;
 
 static char s_bridge_host[64] = BRIDGE_HOST;
 static uint16_t s_bridge_port = BRIDGE_PORT;
@@ -159,7 +160,7 @@ static bool register_device(void)
         JsonDocument doc;
         doc["id"] = s_device_id_gas;
         doc["type"] = get_device_type_string(true);
-        doc["name"] = s_device_name;
+        doc["name"] = s_device_name_gas;
         doc["ip"] = WiFi.localIP().toString();
         serializeJson(doc, body);
         Serial.printf("[%s] Registering gas device: %s\n", TAG, s_device_id_gas);
@@ -570,6 +571,7 @@ static void handle_api_state(void)
         doc["dht_valid"] = s_dht_valid;
         doc["device_id"] = s_device_id;
         doc["device_name"] = s_device_name;
+        doc["device_name_gas"] = s_device_name_gas;
         doc["bridge_connected"] = s_bridge_connected;
         doc["ip"] = WiFi.localIP().toString();
         doc["rssi"] = WiFi.RSSI();
@@ -722,6 +724,7 @@ static void handle_serial(void)
         Serial.printf("  Gas ID:      %s\n", s_device_id_gas);
         Serial.printf("  Temperatura: %.1f C%s\n", s_temperature, s_dht_valid ? "" : " (invalido)");
         Serial.printf("  Umidade:     %.1f %%\n", s_humidity);
+        Serial.printf("  Nome Gas:        %s\n", s_device_name_gas);
         Serial.printf("  Gas:         %d %%\n", s_gas_level);
         Serial.printf("  Alarme:      %s\n", s_alarm ? "SIM" : "nao");
         Serial.printf("  Bateria:     %d %%\n", s_battery);
@@ -792,6 +795,7 @@ void setup(void)
     Serial.printf("  Device: %s\n", s_device_id);
     Serial.printf("  Nome:   %s\n", s_device_name);
     Serial.printf("  Temp:   %s\n", s_device_id_temp);
+    Serial.printf("  Nome Gas:   %s\n", s_device_name_gas);
     Serial.printf("  Gas:    %s\n", s_device_id_gas);
     Serial.printf("============================================\n");
 
