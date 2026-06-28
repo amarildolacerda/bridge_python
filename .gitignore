@@ -4,3 +4,5 @@
 .git_token
 __pycache__/
 *.pyc
+.pio
+.pio/

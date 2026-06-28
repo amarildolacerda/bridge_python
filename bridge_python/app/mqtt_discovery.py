@@ -30,6 +30,11 @@ DEVICE_ENTITY_MAP: dict[DeviceType, list[tuple[str, str, str, str, str]]] = {
         ("rain_level", "sensor", "%", "", "mdi:weather-rainy"),
     ],
     DeviceType.ELECTRICITY: [("current", "sensor", "mA", "current", "")],
+    DeviceType.BRIDGE: [
+        ("ip", "sensor", "", "", "mdi:ip-network"),
+        ("uptime", "sensor", "s", "duration", "mdi:clock-outline"),
+        ("total_devices", "sensor", "", "", "mdi:devices"),
+    ],
 }
 
 
@@ -37,7 +42,7 @@ def build_device_info(dev: BridgedDevice) -> dict:
     return {
         "identifiers": [f"esp32_bridge_{dev.id}"],
         "name": dev.name,
-        "sw_version": "bridge_python_v0.0.9",
+        "sw_version": "bridge_python_v0.0.10",
         "manufacturer": "ESP-HA Bridge",
         "model": dev.type.value,
     }
