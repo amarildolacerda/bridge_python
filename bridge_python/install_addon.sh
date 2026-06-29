@@ -38,7 +38,6 @@ _install() {
         --exclude='venv/' \
         --exclude='__pycache__/' \
         --exclude='.pytest_cache/' \
-        --exclude='.git/' \
         --exclude='tests/' \
         --exclude='*.pyc' \
         --exclude='install_addon.sh' \
