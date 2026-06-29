@@ -1,6 +1,0 @@
-[wokwi]
-version = 1
-chip = "esp32"
-firmware = "build/esp_rainmaker_gateway.bin"
-elf = "build/esp_rainmaker_gateway.elf"
-partitions = "partitions.csv"
