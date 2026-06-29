@@ -23,7 +23,7 @@ def _uptime_s() -> int:
 def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = None, udp_discovery: UDPDiscovery | None = None) -> FastAPI:
     if ws_manager is None:
         ws_manager = WebSocketManager()
-    app = FastAPI(title="ESP32 Bridge Python", version="v0.0.10")
+    app = FastAPI(title="ESP32 Bridge Python", version="v0.0.11")
     app.state.ws_manager = ws_manager
     if udp_discovery:
         app.state.udp_discovery = udp_discovery
@@ -186,7 +186,7 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
             ip = "127.0.0.1"
         return {
             "ip": ip,
-            "version": "v0.0.10",
+            "version": "v0.0.11",
             "uptime_s": _uptime_s(),
             "total_devices": len(registry.get_all()),
             "hostname": hostname,

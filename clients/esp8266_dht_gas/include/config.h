@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FW_VERSION "v0.0.10"
+#define FW_VERSION "v0.0.11"
 #define DEVICE_NAME "Temperature Sensor"
 #define DEVICE_NAME_GAS "Gas Sensor"
 

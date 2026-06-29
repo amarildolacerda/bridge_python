@@ -10,7 +10,7 @@
 #include <ArduinoJson.h>
 
 #ifndef FW_VERSION
-#define FW_VERSION "v0.0.10"
+#define FW_VERSION "v0.0.11"
 #endif
 
 #ifndef DEVICE_ID_PREFIX
