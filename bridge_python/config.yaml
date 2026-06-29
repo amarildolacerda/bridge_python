@@ -14,8 +14,9 @@ boot: "auto"
 init: false
 map:
   - config:rw
+host_network: true
 ports:
-  "80/tcp": 8080
+  "80/tcp": 80
   "5000/udp": 5000
 ports_description:
   "80/tcp": "HTTP API + Web Dashboard"
@@ -26,9 +27,11 @@ options:
   mqtt_user: ""
   mqtt_pass: ""
   log_level: "info"
+  bridge_ip: ""
 schema:
   mqtt_host: "str"
   mqtt_port: "int"
   mqtt_user: "str"
   mqtt_pass: "password"
   log_level: "list(debug|info|warn|error)"
+  bridge_ip: "str"

@@ -126,25 +126,14 @@ class HostMonitor:
         self._task: asyncio.Task | None = None
 
     async def publish_discovery(self):
-        client = self._mqtt._client
-        if not client:
-            LOG.warning("MQTT not connected, skipping host discovery")
-            return
         for entity_name, platform, unit, icon in SENSORS:
             config = _build_config(entity_name, platform, unit, icon)
             topic = f"{DISCOVERY_PREFIX}/{platform}/{DEVICE_ID}/{entity_name}/config"
-            await self._mqtt._publish(topic, json.dumps(config), retain=True)
-        await self._publish_availability("online")
+            await self._mqtt.publish(topic, json.dumps(config), retain=True)
+        await self._mqtt.publish(AVAILABILITY_TOPIC, "online", retain=True)
         LOG.info("Published MQTT discovery for host")
 
-    async def _publish_availability(self, state: str):
-        await self._mqtt._publish(AVAILABILITY_TOPIC, state, retain=True)
-
     async def collect_and_publish(self):
-        client = self._mqtt._client
-        if not client:
-            LOG.warning("host monitor: MQTT not connected")
-            return
         values = {
             "cpu_usage": _cpu_percent(),
             "memory_usage": _memory_percent(),
@@ -155,8 +144,8 @@ class HostMonitor:
             value = values[entity_name]
             topic = f"{DISCOVERY_PREFIX}/{platform}/{DEVICE_ID}/{entity_name}/state"
             str_value = f"{value:.1f}" if isinstance(value, float) else str(value)
-            await self._mqtt._publish(topic, str_value, retain=True)
-        await self._publish_availability("online")
+            await self._mqtt.publish(topic, str_value, retain=True)
+        await self._mqtt.publish(AVAILABILITY_TOPIC, "online", retain=True)
 
     async def start(self, interval: int = 60):
         await self.publish_discovery()

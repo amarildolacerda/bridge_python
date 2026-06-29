@@ -11,6 +11,7 @@ MQTT_PORT="${MQTT_PORT:-1883}"
 MQTT_USER="${MQTT_USER:-}"
 MQTT_PASS="${MQTT_PASS:-}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
+BRIDGE_IP="${BRIDGE_IP:-}"
 
 echo "=== bridge_python (host) ==="
 
@@ -38,5 +39,5 @@ mkdir -p data
 echo "[3/3] Iniciando bridge em http://0.0.0.0:$HTTP_PORT"
 echo ""
 
-export MQTT_HOST MQTT_PORT MQTT_USER MQTT_PASS HTTP_PORT LOG_LEVEL
+export MQTT_HOST MQTT_PORT MQTT_USER MQTT_PASS HTTP_PORT LOG_LEVEL BRIDGE_IP
 exec "$VENV_DIR/bin/python" -m app.main

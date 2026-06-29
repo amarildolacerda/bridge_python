@@ -44,6 +44,8 @@ class UDPDiscovery:
         self._start_time = 0.0
         self._sock: socket.socket | None = None
         self._transport: asyncio.DatagramTransport | None = None
+        if bridge_ip:
+            LOG.info("Using configured bridge IP: %s", bridge_ip)
 
     async def start(self):
         self._running = True
@@ -83,9 +85,9 @@ class UDPDiscovery:
             sender_id = msg.get("id", addr[0])
             self._discovered_ips[sender_id] = (addr[0], time.time())
             self._prune_discovered()
-            self._send_response(addr[0])
+            self._send_response(addr[0], addr[1])
 
-    def _send_response(self, target_ip: str):
+    def _send_response(self, target_ip: str, target_port: int):
         msg = json.dumps({
             "service": DISCOVERY_SERVICE,
             "ip_sta": self._bridge_ip,
@@ -93,7 +95,7 @@ class UDPDiscovery:
         }).encode()
         try:
             if self._sock:
-                self._sock.sendto(msg, (target_ip, DISCOVERY_PORT))
+                self._sock.sendto(msg, (target_ip, target_port))
         except Exception:
             LOG.exception("UDP send error")
 

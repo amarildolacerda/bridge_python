@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
     http_port: int = 80
     discovery_port: int = 5000
+    bridge_ip: str = ""
     data_dir: str = "/data/bridge_python"
 
     model_config = {"env_prefix": ""}

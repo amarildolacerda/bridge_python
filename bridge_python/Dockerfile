@@ -12,4 +12,4 @@ RUN chmod +x run.sh && mkdir -p /data/bridge_python
 EXPOSE 80/tcp
 EXPOSE 5000/udp
 
-CMD ["./run.sh"]
+CMD ["sh", "-c", "mkdir -p /data/bridge_python && exec python3 -m app.main"]

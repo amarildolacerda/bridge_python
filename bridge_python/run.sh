@@ -1,4 +1,4 @@
-#!/usr/bin/ash
+#!/bin/bash
 set -e
 
 # HA add-on: read options from /data/options.json and export as env vars
@@ -8,6 +8,7 @@ if [ -f /data/options.json ]; then
     export MQTT_USER=$(python3 -c "import json; print(json.load(open('/data/options.json')).get('mqtt_user',''))")
     export MQTT_PASS=$(python3 -c "import json; print(json.load(open('/data/options.json')).get('mqtt_pass',''))")
     export LOG_LEVEL=$(python3 -c "import json; print(json.load(open('/data/options.json')).get('log_level','info'))")
+    export BRIDGE_IP=$(python3 -c "import json; print(json.load(open('/data/options.json')).get('bridge_ip',''))")
 fi
 
 # Fallback env vars (for standalone / Docker)
@@ -17,6 +18,7 @@ export MQTT_USER="${MQTT_USER:-}"
 export MQTT_PASS="${MQTT_PASS:-}"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
 export HTTP_PORT="${HTTP_PORT:-80}"
+export BRIDGE_IP="${BRIDGE_IP:-}"
 
 mkdir -p /data/bridge_python
 

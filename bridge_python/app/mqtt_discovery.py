@@ -175,13 +175,47 @@ class MQTTDiscovery:
                 str_value = str(value)
             await self._publish(topic, str_value)
 
-    async def _publish(self, topic: str, payload: str, retain: bool = False):
+    async def _ensure_connected(self) -> bool:
+        if self._connected:
+            return True
+        import aiomqtt
+        try:
+            if self._client:
+                await self._client.__aexit__(None, None, None)
+            self._client = aiomqtt.Client(
+                hostname=self._host,
+                port=self._port,
+                username=self._user or None,
+                password=self._password or None,
+                will=aiomqtt.Will(
+                    topic="esp32-bridge/host/availability",
+                    payload="offline",
+                    qos=1,
+                    retain=True,
+                ),
+            )
+            await self._client.__aenter__()
+            self._connected = True
+            LOG.info("MQTT reconnected to %s:%d", self._host, self._port)
+            return True
+        except Exception:
+            self._connected = False
+            LOG.warning("MQTT reconnect failed to %s:%d", self._host, self._port)
+            return False
+
+    async def publish(self, topic: str, payload: str, retain: bool = False):
         if not self._client:
+            return
+        if not await self._ensure_connected():
             return
         try:
             await self._client.publish(topic, payload=payload, retain=retain)
         except Exception:
+            self._connected = False
             LOG.exception("MQTT publish failed for %s", topic)
+
+    async def _publish(self, topic: str, payload: str, retain: bool = False):
+        await self.publish(topic, payload, retain)
 
     def _build_topic(self, platform: str, device_id: str, entity: str) -> str:
         return f"{DISCOVERY_PREFIX}/{platform}/{device_id}/{entity}/config"
