@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
 import time
 from app.config import settings
 from app.device_registry import DeviceRegistry
@@ -46,6 +47,42 @@ async def mqtt_state_sync():
                 await mqtt.publish_state(dev)
 
 
+async def handle_force_update():
+    from app.git_pull import git_pull as do_git_pull
+    result = do_git_pull()
+    success = result["success"]
+    message = result["message"]
+    updated = result.get("updated", False)
+    LOG.info("Force update result: success=%s updated=%s message=%s", success, updated, message)
+    await mqtt.publish_force_update_result(success, message)
+    if success and updated:
+        LOG.info("Code updated, restarting in 1s...")
+        await asyncio.sleep(1)
+        os._exit(0)
+
+
+async def force_update_listener():
+    import aiomqtt
+    while True:
+        try:
+            async with aiomqtt.Client(
+                hostname=settings.mqtt_host,
+                port=settings.mqtt_port,
+                username=settings.mqtt_user or None,
+                password=settings.mqtt_pass or None,
+            ) as client:
+                async with client.messages() as messages:
+                    await client.subscribe("esp32-bridge/force_update/set")
+                    async for message in messages:
+                        payload = message.payload.decode()
+                        if payload == "PRESS":
+                            LOG.info("Force update triggered via MQTT")
+                            asyncio.create_task(handle_force_update())
+        except Exception:
+            LOG.exception("Force update listener error, retrying in 10s")
+            await asyncio.sleep(10)
+
+
 async def startup():
     registry.load()
     LOG.info("Loaded %d devices from persistence", len(registry.get_all()))
@@ -56,6 +93,7 @@ async def startup():
     await host_monitor.start()
     asyncio.create_task(heartbeat_monitor())
     asyncio.create_task(mqtt_state_sync())
+    asyncio.create_task(force_update_listener())
 
 
 @app.on_event("startup")

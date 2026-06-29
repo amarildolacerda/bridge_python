@@ -234,6 +234,24 @@ class TestMQTTDiscovery:
         asyncio.run(m.publish_device_config(BridgedDevice(id="t1", name="T", type=DeviceType.ONOFF)))
 
     @pytest.mark.asyncio
+    async def test_publish_force_update_result_success(self, connected_mqtt):
+        await connected_mqtt.publish_force_update_result(True, "Updated with 3 commits")
+        connected_mqtt._client.publish.assert_called_once()
+        args, kwargs = connected_mqtt._client.publish.call_args
+        assert args[0] == "esp32-bridge/force_update/result"
+        payload = json.loads(kwargs["payload"])
+        assert payload["success"] is True
+        assert payload["message"] == "Updated with 3 commits"
+
+    @pytest.mark.asyncio
+    async def test_publish_force_update_result_error(self, connected_mqtt):
+        await connected_mqtt.publish_force_update_result(False, "Git not found")
+        connected_mqtt._client.publish.assert_called_once()
+        args, kwargs = connected_mqtt._client.publish.call_args
+        payload = json.loads(kwargs["payload"])
+        assert payload["success"] is False
+
+    @pytest.mark.asyncio
     async def test_publish_force_update_config(self, connected_mqtt):
         await connected_mqtt.publish_force_update_config()
         connected_mqtt._client.publish.assert_called_once()
