@@ -22,4 +22,13 @@ export BRIDGE_IP="${BRIDGE_IP:-}"
 
 mkdir -p /data/bridge_python
 
+# Auto-detect source directory (mounted addon path takes precedence)
+if [ -f "/addons/esp32_bridge_python/app/main.py" ]; then
+    export BRIDGE_SRC_DIR="/addons/esp32_bridge_python"
+elif [ -f "/app/app/main.py" ]; then
+    export BRIDGE_SRC_DIR="/app"
+else
+    export BRIDGE_SRC_DIR=""
+fi
+
 exec python3 -m app.main
