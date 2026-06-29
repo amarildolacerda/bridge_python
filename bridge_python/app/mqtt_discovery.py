@@ -203,6 +203,39 @@ class MQTTDiscovery:
             LOG.warning("MQTT reconnect failed to %s:%d", self._host, self._port)
             return False
 
+    FORCE_UPDATE_BUTTON_CONFIG = {
+        "platform": "button",
+        "name": "Force Update",
+        "unique_id": "esp32_bridge_force_update",
+        "device_class": "update",
+        "icon": "mdi:cloud-download",
+        "command_topic": "esp32-bridge/force_update/set",
+        "payload_press": "PRESS",
+        "device": {
+            "identifiers": ["esp32_bridge_host"],
+            "name": "ESP32 Bridge Host",
+            "sw_version": "bridge_python_v0.0.10",
+            "manufacturer": "ESP-HA Bridge",
+            "model": "bridge",
+        },
+    }
+
+    async def publish_force_update_config(self):
+        if not self._connected:
+            return
+        topic = f"{DISCOVERY_PREFIX}/button/esp32_bridge_host/force_update/config"
+        await self._publish(topic, json.dumps(self.FORCE_UPDATE_BUTTON_CONFIG), retain=True)
+
+    async def publish_force_update_result(self, success: bool, message: str):
+        payload = json.dumps({"success": success, "message": message})
+        await self.publish("esp32-bridge/force_update/result", payload)
+
+    async def remove_force_update_config(self):
+        if not self._connected:
+            return
+        topic = f"{DISCOVERY_PREFIX}/button/esp32_bridge_host/force_update/config"
+        await self._publish(topic, "", retain=True)
+
     async def publish(self, topic: str, payload: str, retain: bool = False):
         if not self._client:
             return

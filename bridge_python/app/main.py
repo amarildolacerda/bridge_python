@@ -51,6 +51,7 @@ async def startup():
     LOG.info("Loaded %d devices from persistence", len(registry.get_all()))
     for dev in registry.get_all():
         await mqtt.publish_device_config(dev)
+    await mqtt.publish_force_update_config()
     await udp.start()
     await host_monitor.start()
     asyncio.create_task(heartbeat_monitor())

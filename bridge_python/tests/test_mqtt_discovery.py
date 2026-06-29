@@ -232,3 +232,18 @@ class TestMQTTDiscovery:
         m._connected = False
         import asyncio
         asyncio.run(m.publish_device_config(BridgedDevice(id="t1", name="T", type=DeviceType.ONOFF)))
+
+    @pytest.mark.asyncio
+    async def test_publish_force_update_config(self, connected_mqtt):
+        await connected_mqtt.publish_force_update_config()
+        connected_mqtt._client.publish.assert_called_once()
+        args, kwargs = connected_mqtt._client.publish.call_args
+        topic = args[0]
+        assert topic == "homeassistant/button/esp32_bridge_host/force_update/config"
+        assert kwargs["retain"] is True
+        payload = json.loads(kwargs["payload"])
+        assert payload["platform"] == "button"
+        assert payload["command_topic"] == "esp32-bridge/force_update/set"
+        assert payload["payload_press"] == "PRESS"
+        assert payload["unique_id"] == "esp32_bridge_force_update"
+        assert payload["device"]["identifiers"] == ["esp32_bridge_host"]
