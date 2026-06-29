@@ -873,6 +873,13 @@ static esp_err_t broadcast_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t git_pull_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"success\":false,\"updated\":false,\"message\":\"Not applicable on ESP32 firmware\"}");
+    return ESP_OK;
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET)
@@ -1305,6 +1312,13 @@ esp_err_t wifi_server_start(void)
         .handler = broadcast_handler,
         .user_ctx = NULL};
     httpd_register_uri_handler(s_server, &broadcast_uri);
+
+    httpd_uri_t git_pull_uri = {
+        .uri = "/api/gateway/git-pull",
+        .method = HTTP_POST,
+        .handler = git_pull_handler,
+        .user_ctx = NULL};
+    httpd_register_uri_handler(s_server, &git_pull_uri);
 
     httpd_uri_t qrcode_uri = {
         .uri = "/api/qrcode",

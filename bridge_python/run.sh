@@ -31,4 +31,7 @@ else
     export BRIDGE_SRC_DIR=""
 fi
 
+# Mark all directories as safe for git (container may run as different user)
+git config --global --add safe.directory '*' 2>/dev/null || true
+
 exec python3 -m app.main

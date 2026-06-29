@@ -7,18 +7,32 @@ import subprocess
 LOG = logging.getLogger(__name__)
 
 
+def _find_git_root(path: str) -> str | None:
+    current = os.path.abspath(path)
+    while True:
+        if os.path.isdir(os.path.join(current, ".git")):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        current = parent
+
+
 def detect_repo_path() -> str:
     src_dir = os.environ.get("BRIDGE_SRC_DIR", "")
-    if src_dir and os.path.isdir(os.path.join(src_dir, ".git")):
-        return src_dir
+    if src_dir:
+        found = _find_git_root(src_dir)
+        if found:
+            return found
     candidates = [
         "/addons/esp32_bridge_python",
         "/data/bridge_python",
         "/app",
     ]
     for path in candidates:
-        if os.path.isdir(os.path.join(path, ".git")):
-            return path
+        found = _find_git_root(path)
+        if found:
+            return found
     return ""
 
 

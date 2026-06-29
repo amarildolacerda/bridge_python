@@ -71,13 +71,13 @@ async def force_update_listener():
                 username=settings.mqtt_user or None,
                 password=settings.mqtt_pass or None,
             ) as client:
-                async with client.messages() as messages:
-                    await client.subscribe("esp32-bridge/force_update/set")
-                    async for message in messages:
-                        payload = message.payload.decode()
-                        if payload == "PRESS":
-                            LOG.info("Force update triggered via MQTT")
-                            asyncio.create_task(handle_force_update())
+                messages = client.messages
+                await client.subscribe("esp32-bridge/force_update/set")
+                async for message in messages:
+                    payload = message.payload.decode()
+                    if payload == "PRESS":
+                        LOG.info("Force update triggered via MQTT")
+                        asyncio.create_task(handle_force_update())
         except Exception:
             LOG.exception("Force update listener error, retrying in 10s")
             await asyncio.sleep(10)

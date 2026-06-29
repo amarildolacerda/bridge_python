@@ -23,7 +23,11 @@ services:
     container_name: esp32-bridge
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - .:/project
     environment:
+      BRIDGE_SRC_DIR: /project/bridge_python
+      PYTHONPATH: /project/bridge_python
       MQTT_HOST: localhost
       MQTT_PORT: "1883"
       HTTP_PORT: "80"

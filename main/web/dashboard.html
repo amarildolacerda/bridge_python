@@ -19,6 +19,7 @@
 <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()" title="Admin">&#9881;</button>
 <div class="admin-dropdown" id="adminMenu">
 <div class="dropdown-item" onclick="doBroadcast()">&#128260; Buscar dispositivos</div>
+<div class="dropdown-item" onclick="forceGitPull()">&#128190; Forcar Atualizacao (git pull)</div>
 <div class="dropdown-item danger" onclick="doReset()">&#8635; Reiniciar Gateway</div>
 </div>
 </div>
@@ -82,6 +83,22 @@ toast('Reiniciando...');
 fetch('/api/gateway/reset',{method:'POST'}).then(function(r){
 if(r.ok)toast('Gateway reiniciando...');
 }).catch(function(){});
+}
+
+function forceGitPull(){
+document.getElementById('adminMenu').style.display='none';
+if(!confirm('Forcar atualizacao via git pull?'))return;
+toast('Executando git pull...');
+fetch('/api/gateway/git-pull',{method:'POST'}).then(function(r){
+return r.json();
+}).then(function(data){
+if(data.success){
+if(data.updated)toast('Atualizado! '+data.message);
+else toast('Ja atualizado: '+data.message);
+}else{
+toast('Falha: '+data.message,true);
+}
+}).catch(function(){toast('Erro de conexao',true);});
 }
 
 async function load(){try{
