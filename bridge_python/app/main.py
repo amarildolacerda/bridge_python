@@ -101,6 +101,10 @@ async def on_startup():
     await mqtt.start()
     await startup()
 
+@app.on_event("shutdown")
+async def on_shutdown():
+    await mqtt.remove_force_update_config()
+
 
 def main() -> None:
     import uvicorn
