@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     discovery_port: int = 5000
     bridge_ip: str = ""
     data_dir: str = "/data/bridge_python"
+    addon_slug: str = "esp32_bridge_python"
 
     model_config = {"env_prefix": ""}
 
