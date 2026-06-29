@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import logging
 import os
 import subprocess
@@ -12,17 +13,16 @@ def detect_repo_path() -> str:
         return src_dir
     candidates = [
         "/addons/esp32_bridge_python",
+        "/data/bridge_python",
         "/app",
     ]
     for path in candidates:
         if os.path.isdir(os.path.join(path, ".git")):
             return path
-    return os.environ.get("BRIDGE_SRC_DIR", "")
+    return ""
 
 
-def git_pull(repo_path: str | None = None) -> dict:
-    if repo_path is None:
-        repo_path = detect_repo_path()
+def _sync_git_pull(repo_path: str) -> dict:
     if not repo_path:
         return {"success": False, "updated": False, "message": "Repository path not found", "output": ""}
     git_dir = os.path.join(repo_path, ".git")
@@ -70,3 +70,10 @@ def git_pull(repo_path: str | None = None) -> dict:
     except Exception as e:
         LOG.exception("Git pull error")
         return {"success": False, "updated": False, "message": str(e), "output": ""}
+
+
+async def git_pull(repo_path: str | None = None) -> dict:
+    if repo_path is None:
+        repo_path = detect_repo_path()
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _sync_git_pull, repo_path)

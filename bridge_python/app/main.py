@@ -49,7 +49,7 @@ async def mqtt_state_sync():
 
 async def handle_force_update():
     from app.git_pull import git_pull as do_git_pull
-    result = do_git_pull()
+    result = await do_git_pull()
     success = result["success"]
     message = result["message"]
     updated = result.get("updated", False)
