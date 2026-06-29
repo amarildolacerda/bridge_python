@@ -22,7 +22,7 @@ services:
       - ./config:/config
 
   bridge:
-    build: ./esp32_bridge_python
+    build: ./bridge_python
     network_mode: host
     environment:
       MQTT_HOST: localhost

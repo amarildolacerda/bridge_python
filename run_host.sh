@@ -13,7 +13,7 @@ MQTT_PASS="${MQTT_PASS:-}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 BRIDGE_IP="${BRIDGE_IP:-}"
 
-echo "=== esp32_bridge_python (host) ==="
+echo "=== bridge_python (host) ==="
 
 if [ ! -d "$VENV_DIR" ]; then
     echo "[1/3] Criando venv..."
