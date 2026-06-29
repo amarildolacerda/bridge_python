@@ -1,5 +1,7 @@
 FROM python:3.11-slim
 
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt .
@@ -12,4 +14,4 @@ RUN chmod +x run.sh && mkdir -p /data/bridge_python
 EXPOSE 80/tcp
 EXPOSE 5000/udp
 
-CMD ["sh", "-c", "mkdir -p /data/bridge_python && exec python3 -m app.main"]
+CMD ["sh", "-c", "exec /app/run.sh"]

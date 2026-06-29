@@ -12,8 +12,10 @@ arch:
 startup: "application"
 boot: "auto"
 init: false
+watchdog: true
 map:
   - config:rw
+  - addons:rw
 host_network: true
 ports:
   "80/tcp": 80
