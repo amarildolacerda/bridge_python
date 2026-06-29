@@ -148,6 +148,13 @@ class TestHttpAPI:
         resp = await client.post("/api/gateway/reset")
         assert resp.status_code == 200
 
+    async def test_git_pull_endpoint(self, client):
+        resp = await client.post("/api/gateway/git-pull")
+        assert resp.status_code in (200, 500)
+        data = resp.json()
+        assert "success" in data
+        assert "message" in data
+
     async def test_ota(self, client):
         resp = await client.post("/api/ota")
         assert resp.status_code == 200

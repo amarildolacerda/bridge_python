@@ -226,6 +226,12 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         loop.call_later(0.5, os._exit, 0)
         return {"status": "ok", "message": "reset initiated"}
 
+    @app.post("/api/gateway/git-pull")
+    async def git_pull_endpoint():
+        from app.git_pull import git_pull as do_git_pull
+        result = do_git_pull()
+        return JSONResponse(result, status_code=200 if result["success"] else 500)
+
     @app.get("/api/qrcode")
     async def qrcode():
         return {"service_name": "esp-bridge", "pop": ""}
