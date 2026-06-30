@@ -24,11 +24,9 @@ mkdir -p /data/bridge_python
 
 # Auto-detect source directory (mounted addon path takes precedence)
 if [ -f "/addons/bridge_python/app/main.py" ]; then
-    export BRIDGE_SRC_DIR="/addons/bridge_python"
+    cd /addons/bridge_python
 elif [ -f "/app/app/main.py" ]; then
-    export BRIDGE_SRC_DIR="/app"
-else
-    export BRIDGE_SRC_DIR=""
+    cd /app
 fi
 
 # Mark all directories as safe for git (container may run as different user)

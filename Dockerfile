@@ -8,6 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY run.sh .
+COPY app/ /app/app/
 
 RUN chmod +x run.sh && mkdir -p /data/bridge_python
 
