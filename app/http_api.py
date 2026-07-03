@@ -186,7 +186,7 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
             ip = "127.0.0.1"
         return {
             "ip": ip,
-            "version": "v0.0.13",
+            "version": "v0.0.11",
             "uptime_s": _uptime_s(),
             "total_devices": len(registry.get_all()),
             "hostname": hostname,
