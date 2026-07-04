@@ -1,0 +1,38 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/etc/mosquitto
+      - ./mosquitto/data:/var/lib/mosquitto
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    privileged: true
+    volumes:
+      - ./homeassistant/config:/config
+
+  bridge:
+    build: .
+    container_name: esp32-bridge
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "5000:5000/udp"
+    volumes:
+      - ./data:/data/bridge_python
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      HTTP_PORT: "80"
+      LOG_LEVEL: info
+    depends_on:
+      - mosquitto

@@ -1,0 +1,4 @@
+data/
+homeassistant/config/
+__pycache__/
+*.pyc
