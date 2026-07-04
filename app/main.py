@@ -9,6 +9,7 @@ from app.http_api import create_app
 from app.host_monitor import HostMonitor
 from app.mqtt_discovery import MQTTDiscovery
 from app.udp_discovery import UDPDiscovery
+from app.mdns_discovery import MDNSDiscovery
 from app.websocket_manager import WebSocketManager
 
 LOG = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ LOG = logging.getLogger(__name__)
 registry = DeviceRegistry(data_dir=settings.data_dir)
 ws_manager = WebSocketManager()
 udp = UDPDiscovery(bridge_ip=settings.bridge_ip, http_port=settings.http_port)
+mdns = MDNSDiscovery(http_port=settings.http_port, bridge_ip=settings.bridge_ip)
 app = create_app(registry, ws_manager, udp)
 app.state.ws_manager = ws_manager
 
@@ -90,6 +92,7 @@ async def startup():
         await mqtt.publish_device_config(dev)
     await mqtt.publish_force_update_config()
     await udp.start()
+    await mdns.start()
     await host_monitor.start()
     asyncio.create_task(heartbeat_monitor())
     asyncio.create_task(mqtt_state_sync())

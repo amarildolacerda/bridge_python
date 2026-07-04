@@ -34,5 +34,6 @@ services:
       MQTT_PORT: "1883"
       HTTP_PORT: "80"
       LOG_LEVEL: info
+      BRIDGE_IP: 0.0.0.0
     depends_on:
       - mosquitto
