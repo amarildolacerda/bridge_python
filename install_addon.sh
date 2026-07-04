@@ -2,7 +2,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-ADDON_NAME="bridge_python"
+ADDON_NAME="home_bridge"
 CANDIDATES=(
     /addons
     /usr/share/hassio/addons

@@ -22,7 +22,7 @@ services:
       - ./config:/config
 
   bridge:
-    build: ./bridge_python
+    build: ./home_bridge
     network_mode: host
     environment:
       MQTT_HOST: localhost

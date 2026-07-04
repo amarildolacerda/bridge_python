@@ -25,8 +25,8 @@ def detect_repo_path() -> str:
         if found:
             return found
     candidates = [
-        "/addons/esp32_bridge_python",
-        "/data/bridge_python",
+        "/addons/home_bridge",
+        "/data/home_bridge",
         "/app",
     ]
     for path in candidates:

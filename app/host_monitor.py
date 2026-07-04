@@ -8,7 +8,7 @@ import time
 LOG = logging.getLogger(__name__)
 
 DISCOVERY_PREFIX = "homeassistant"
-AVAILABILITY_TOPIC = "esp32-bridge/host/availability"
+AVAILABILITY_TOPIC = "home-bridge/host/availability"
 DEVICE_ID = "host"
 DEVICE_NAME = "Bridge Host"
 SENSORS = [
@@ -92,9 +92,9 @@ def _uptime_days() -> float:
 
 def _build_device_info() -> dict:
     return {
-        "identifiers": [f"bridge_python_{DEVICE_ID}"],
+        "identifiers": [f"home_bridge_{DEVICE_ID}"],
         "name": DEVICE_NAME,
-        "sw_version": "bridge_python_v0.0.11",
+        "sw_version": "home_bridge_v0.0.11",
         "manufacturer": "ESP-HA Bridge",
         "model": "host",
     }
@@ -107,7 +107,7 @@ def _build_config(entity_name: str, platform: str, unit: str, icon: str) -> dict
         "platform": platform,
         "name": entity_name,
         "state_topic": f"{base}/state",
-        "unique_id": f"bridge_python_{DEVICE_ID}_{entity_name}",
+        "unique_id": f"home_bridge_{DEVICE_ID}_{entity_name}",
         "device": _build_device_info(),
         "availability_topic": AVAILABILITY_TOPIC,
         "payload_available": "online",

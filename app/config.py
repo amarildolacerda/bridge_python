@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     http_port: int = 80
     discovery_port: int = 5000
     bridge_ip: str = ""
-    data_dir: str = "/data/bridge_python"
-    addon_slug: str = "bridge_python"
+    data_dir: str = "/data/home_bridge"
+    addon_slug: str = "home_bridge"
 
     model_config = {"env_prefix": ""}
 

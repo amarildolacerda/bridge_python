@@ -26,7 +26,7 @@ class TestMQTTDiscovery:
     def test_build_device_info(self):
         dev = BridgedDevice(id="esp8266_test", name="Test", type=DeviceType.TEMPERATURE)
         info = build_device_info(dev)
-        assert info["identifiers"] == ["esp32_bridge_esp8266_test"]
+        assert info["identifiers"] == ["home_bridge_esp8266_test"]
         assert info["name"] == "Test"
         assert info["model"] == "temperature"
 
@@ -161,7 +161,7 @@ class TestMQTTDiscovery:
             assert kwargs["retain"] is True
             payload = json.loads(kwargs["payload"])
             assert "device" in payload
-            assert payload["device"]["identifiers"] == ["esp32_bridge_esp8266_test"]
+            assert payload["device"]["identifiers"] == ["home_bridge_esp8266_test"]
 
     @pytest.mark.asyncio
     async def test_publish_device_config_switch_has_command_topic(self, connected_mqtt):
@@ -238,7 +238,7 @@ class TestMQTTDiscovery:
         await connected_mqtt.publish_force_update_result(True, "Updated with 3 commits")
         connected_mqtt._client.publish.assert_called_once()
         args, kwargs = connected_mqtt._client.publish.call_args
-        assert args[0] == "esp32-bridge/force_update/result"
+        assert args[0] == "home-bridge/force_update/result"
         payload = json.loads(kwargs["payload"])
         assert payload["success"] is True
         assert payload["message"] == "Updated with 3 commits"
@@ -257,11 +257,11 @@ class TestMQTTDiscovery:
         connected_mqtt._client.publish.assert_called_once()
         args, kwargs = connected_mqtt._client.publish.call_args
         topic = args[0]
-        assert topic == "homeassistant/button/esp32_bridge_host/force_update/config"
+        assert topic == "homeassistant/button/home_bridge_host/force_update/config"
         assert kwargs["retain"] is True
         payload = json.loads(kwargs["payload"])
         assert payload["platform"] == "button"
-        assert payload["command_topic"] == "esp32-bridge/force_update/set"
+        assert payload["command_topic"] == "home-bridge/force_update/set"
         assert payload["payload_press"] == "PRESS"
-        assert payload["unique_id"] == "esp32_bridge_force_update"
-        assert payload["device"]["identifiers"] == ["esp32_bridge_host"]
+        assert payload["unique_id"] == "home_bridge_force_update"
+        assert payload["device"]["identifiers"] == ["home_bridge_host"]

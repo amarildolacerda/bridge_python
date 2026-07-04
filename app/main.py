@@ -72,7 +72,7 @@ async def force_update_listener():
                 password=settings.mqtt_pass or None,
             ) as client:
                 messages = client.messages
-                await client.subscribe("esp32-bridge/force_update/set")
+                await client.subscribe("home-bridge/force_update/set")
                 async for message in messages:
                     payload = message.payload.decode()
                     if payload == "PRESS":

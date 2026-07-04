@@ -20,11 +20,11 @@ export LOG_LEVEL="${LOG_LEVEL:-info}"
 export HTTP_PORT="${HTTP_PORT:-80}"
 export BRIDGE_IP="${BRIDGE_IP:-}"
 
-mkdir -p /data/bridge_python
+mkdir -p /data/home_bridge
 
 # Auto-detect source directory (mounted addon path takes precedence)
-if [ -f "/addons/bridge_python/app/main.py" ]; then
-    cd /addons/bridge_python
+if [ -f "/addons/home_bridge/app/main.py" ]; then
+    cd /addons/home_bridge
 elif [ -f "/app/app/main.py" ]; then
     cd /app
 fi

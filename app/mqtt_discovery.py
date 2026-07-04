@@ -46,9 +46,9 @@ DEVICE_ENTITY_MAP: dict[DeviceType, list[tuple[str, str, str, str, str]]] = {
 
 def build_device_info(dev: BridgedDevice) -> dict:
     return {
-        "identifiers": [f"esp32_bridge_{dev.id}"],
+        "identifiers": [f"home_bridge_{dev.id}"],
         "name": dev.name,
-        "sw_version": "bridge_python_v0.0.11",
+        "sw_version": "home_bridge_v0.0.11",
         "manufacturer": "ESP-HA Bridge",
         "model": dev.type.value,
     }
@@ -69,7 +69,7 @@ def build_entity_config(
         "platform": platform,
         "name": entity_name,
         "state_topic": f"{base_topic}/state",
-        "unique_id": f"esp32_bridge_{device_id}_{entity_name}",
+        "unique_id": f"home_bridge_{device_id}_{entity_name}",
         "device": build_device_info(dev),
     }
     if unit:
@@ -118,7 +118,7 @@ class MQTTDiscovery:
                 username=self._user or None,
                 password=self._password or None,
                 will=aiomqtt.Will(
-                    topic="esp32-bridge/host/availability",
+                    topic="home-bridge/host/availability",
                     payload="offline",
                     qos=1,
                     retain=True,
@@ -194,7 +194,7 @@ class MQTTDiscovery:
                 username=self._user or None,
                 password=self._password or None,
                 will=aiomqtt.Will(
-                    topic="esp32-bridge/host/availability",
+                    topic="home-bridge/host/availability",
                     payload="offline",
                     qos=1,
                     retain=True,
@@ -212,15 +212,15 @@ class MQTTDiscovery:
     FORCE_UPDATE_BUTTON_CONFIG = {
         "platform": "button",
         "name": "Force Update",
-        "unique_id": "esp32_bridge_force_update",
+        "unique_id": "home_bridge_force_update",
         "device_class": "update",
         "icon": "mdi:cloud-download",
-        "command_topic": "esp32-bridge/force_update/set",
+        "command_topic": "home-bridge/force_update/set",
         "payload_press": "PRESS",
         "device": {
-            "identifiers": ["esp32_bridge_host"],
+            "identifiers": ["home_bridge_host"],
             "name": "ESP32 Bridge Host",
-            "sw_version": "bridge_python_v0.0.11",
+            "sw_version": "home_bridge_v0.0.11",
             "manufacturer": "ESP-HA Bridge",
             "model": "bridge",
         },
@@ -229,17 +229,17 @@ class MQTTDiscovery:
     async def publish_force_update_config(self):
         if not self._connected:
             return
-        topic = f"{DISCOVERY_PREFIX}/button/esp32_bridge_host/force_update/config"
+        topic = f"{DISCOVERY_PREFIX}/button/home_bridge_host/force_update/config"
         await self._publish(topic, json.dumps(self.FORCE_UPDATE_BUTTON_CONFIG), retain=True)
 
     async def publish_force_update_result(self, success: bool, message: str):
         payload = json.dumps({"success": success, "message": message})
-        await self.publish("esp32-bridge/force_update/result", payload)
+        await self.publish("home-bridge/force_update/result", payload)
 
     async def remove_force_update_config(self):
         if not self._connected:
             return
-        topic = f"{DISCOVERY_PREFIX}/button/esp32_bridge_host/force_update/config"
+        topic = f"{DISCOVERY_PREFIX}/button/home_bridge_host/force_update/config"
         await self._publish(topic, "", retain=True)
 
     async def publish(self, topic: str, payload: str, retain: bool = False):

@@ -1,6 +1,6 @@
-name: "ESP32 Bridge Python"
+name: "Home Bridge"
 version: "0.0.10"
-slug: "bridge_python"
+slug: "home_bridge"
 description: "ESP32 Bridge clone for Home Assistant with MQTT Discovery"
 url: "https://github.com/amarildolacerda/bridge"
 arch:

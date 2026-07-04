@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Limpa todos os registros MQTT Discovery do bridge ESP32 no Home Assistant.
-Remove entidades de devices que não estão mais registrados no bridge_python.
+Remove entidades de devices que não estão mais registrados no home_bridge.
 
 Uso:
   python cleanup_mqtt_bridge.py --dry-run              # mostra o que seria removido
@@ -22,7 +22,7 @@ import asyncio
 import json
 
 DISCOVERY_PREFIX = "homeassistant"
-VIA_DEVICE = "esp32_bridge"
+VIA_DEVICE = "home_bridge"
 
 
 async def run(host: str, port: int, dry_run: bool):
