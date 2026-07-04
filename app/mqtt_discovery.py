@@ -25,6 +25,12 @@ DEVICE_ENTITY_MAP: dict[DeviceType, list[tuple[str, str, str, str, str]]] = {
         ("alarm", "binary_sensor", "", "gas", ""),
         ("gas_level", "sensor", "%", "", "mdi:gas-cylinder"),
     ],
+    DeviceType.DHT_GAS: [
+        ("temperature", "sensor", "°C", "temperature", ""),
+        ("humidity", "sensor", "%", "humidity", ""),
+        ("alarm", "binary_sensor", "", "gas", ""),
+        ("gas_level", "sensor", "%", "", "mdi:gas-cylinder"),
+    ],
     DeviceType.RAIN: [
         ("rain_digital", "binary_sensor", "", "moisture", ""),
         ("rain_level", "sensor", "%", "", "mdi:weather-rainy"),
