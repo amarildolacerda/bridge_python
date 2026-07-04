@@ -111,14 +111,6 @@ class ResetResponse(BaseModel):
     status: str
     message: str
 
-class OtaResponse(BaseModel):
-    status: str
-    message: str
-
-class QRCodeResponse(BaseModel):
-    service_name: str
-    pop: str
-
 class PingResponse(BaseModel):
     status: str
 

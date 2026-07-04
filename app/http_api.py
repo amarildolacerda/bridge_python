@@ -20,9 +20,7 @@ from app.models import (
     DeviceRemoveRequest,
     ErrorResponse,
     GatewayInfoResponse,
-    OtaResponse,
     PingResponse,
-    QRCodeResponse,
     ResetResponse,
     StatusOkResponse,
     StatusResponse,
@@ -217,13 +215,6 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
         result = await do_git_pull()
         return JSONResponse(result, status_code=200 if result["success"] else 500)
 
-    @app.get("/api/qrcode", response_model=QRCodeResponse, tags=["gateway"], summary="Obter dados do QR code RainMaker")
-    async def qrcode():
-        return {"service_name": "esp-bridge", "pop": ""}
-
-    @app.post("/api/ota", response_model=OtaResponse, tags=["gateway"], summary="OTA (não aplicável no Python)")
-    async def ota():
-        return {"status": "ok", "message": "ota not applicable in python"}
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket):
