@@ -94,7 +94,7 @@ def _build_device_info() -> dict:
     return {
         "identifiers": [f"home_bridge_{DEVICE_ID}"],
         "name": DEVICE_NAME,
-        "sw_version": "home_bridge_v0.0.11",
+        "sw_version": "home_bridge_v0.0.14",
         "manufacturer": "ESP-HA Bridge",
         "model": "host",
     }

@@ -48,7 +48,7 @@ def build_device_info(dev: BridgedDevice) -> dict:
     return {
         "identifiers": [f"home_bridge_{dev.id}"],
         "name": dev.name,
-        "sw_version": "home_bridge_v0.0.11",
+        "sw_version": "home_bridge_v0.0.14",
         "manufacturer": "ESP-HA Bridge",
         "model": dev.type.value,
     }
@@ -220,7 +220,7 @@ class MQTTDiscovery:
         "device": {
             "identifiers": ["home_bridge_host"],
             "name": "ESP32 Bridge Host",
-            "sw_version": "home_bridge_v0.0.11",
+            "sw_version": "home_bridge_v0.0.14",
             "manufacturer": "ESP-HA Bridge",
             "model": "bridge",
         },
