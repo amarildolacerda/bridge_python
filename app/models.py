@@ -16,6 +16,7 @@ class DeviceType(str, Enum):
     GAS = "gas"
     DHT_GAS = "dht_gas"
     RAIN = "rain"
+    SOIL_MOISTURE = "soil_moisture"
     ELECTRICITY = "electricity"
     BRIDGE = "bridge"
     UNKNOWN = "unknown"

@@ -35,6 +35,9 @@ DEVICE_ENTITY_MAP: dict[DeviceType, list[tuple[str, str, str, str, str]]] = {
         ("rain_digital", "binary_sensor", "", "moisture", ""),
         ("rain_level", "sensor", "%", "", "mdi:weather-rainy"),
     ],
+    DeviceType.SOIL_MOISTURE: [
+        ("moisture_pct", "sensor", "%", "humidity", "mdi:water-percent"),
+    ],
     DeviceType.ELECTRICITY: [("current", "sensor", "mA", "current", "")],
     DeviceType.BRIDGE: [
         ("ip", "sensor", "", "", "mdi:ip-network"),
