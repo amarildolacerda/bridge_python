@@ -5,6 +5,8 @@ import logging
 import socket
 import time
 
+from app.hub_compat import build_announce_bytes
+
 LOG = logging.getLogger(__name__)
 
 DISCOVERY_PORT = 5000
@@ -97,6 +99,10 @@ class UDPDiscovery:
             self._sock.close()
 
     def _handle_message(self, data: bytes, addr: tuple[str, int]):
+        # Hub-compat: binary MSG_GW_DISCOVER (0x0A) from TCP nodes
+        if data and data[0] == 0x0A:
+            self._send_binary_announce(addr[0], addr[1])
+            return
         try:
             msg = json.loads(data.decode())
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -109,6 +115,14 @@ class UDPDiscovery:
             self._discovered_ips[sender_id] = (addr[0], time.time())
             self._prune_discovered()
             self._send_response(addr[0], addr[1])
+
+    def _send_binary_announce(self, target_ip: str, target_port: int):
+        payload = build_announce_bytes(self._bridge_ip, self._http_port)
+        try:
+            if self._sock:
+                self._sock.sendto(payload, (target_ip, target_port))
+        except Exception:
+            LOG.exception("UDP binary announce send error")
 
     def _send_response(self, target_ip: str, target_port: int):
         msg = json.dumps({
