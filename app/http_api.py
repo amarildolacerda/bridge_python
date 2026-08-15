@@ -10,6 +10,12 @@ from app.device_registry import DeviceRegistry
 from app.models import DeviceType
 from app.udp_discovery import UDPDiscovery
 from app.websocket_manager import WebSocketManager
+from app.hub_compat import (
+    handle_node_register,
+    handle_node_state,
+    handle_node_heartbeat,
+    handle_node_command_get,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -258,5 +264,40 @@ def create_app(registry: DeviceRegistry, ws_manager: WebSocketManager | None = N
     async def dashboard_css():
         from app.web import dashboard_css_content
         return Response(content=dashboard_css_content, media_type="text/css")
+
+    @app.post("/node/register")
+    async def node_register(request: Request):
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"status": "error", "message": "invalid json"}, status_code=400)
+        mqtt = getattr(request.app.state, "mqtt", None)
+        ws = request.app.state.ws_manager
+        resp, code = await handle_node_register(registry, mqtt, ws, body)
+        return JSONResponse(resp, status_code=code)
+
+    @app.post("/node/state")
+    async def node_state(request: Request):
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"status": "error", "message": "invalid json"}, status_code=400)
+        ws = request.app.state.ws_manager
+        resp, code = await handle_node_state(registry, ws, body)
+        return JSONResponse(resp, status_code=code)
+
+    @app.post("/node/heartbeat")
+    async def node_heartbeat(request: Request):
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"status": "error", "message": "invalid json"}, status_code=400)
+        resp, code = await handle_node_heartbeat(registry, body)
+        return JSONResponse(resp, status_code=code)
+
+    @app.get("/node/command/{device_id}")
+    async def node_command(device_id: str):
+        resp, code = await handle_node_command_get(registry, device_id)
+        return JSONResponse(resp, status_code=code)
 
     return app

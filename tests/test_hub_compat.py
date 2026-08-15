@@ -91,3 +91,42 @@ def test_translate_and_topic():
     assert hub_compat.device_id_from_command_topic("homeassistant/light/agri_x/light/set") == "agri_x"
     assert hub_compat.device_id_from_command_topic("homeassistant/switch/agri_x/power/set") == "agri_x"
     assert hub_compat.device_id_from_command_topic("esp32-bridge/force_update/set") is None
+
+
+from fastapi.testclient import TestClient
+from app.websocket_manager import WebSocketManager
+from app.http_api import create_app
+
+
+def _client(tmp_path):
+    reg = DeviceRegistry(data_dir=str(tmp_path))
+    reg.load()
+    ws = WebSocketManager()
+    app = create_app(reg, ws)
+    app.state.mqtt = None
+    return TestClient(app), reg
+
+
+def test_node_endpoints(tmp_path):
+    client, reg = _client(tmp_path)
+    r = client.post("/node/register", json={"device_id": "agri_x", "sensor_type": 9, "device_name": "Lamp"})
+    assert r.status_code == 200
+    assert r.json()["assigned_slot"] == 0
+
+    r = client.post("/node/state", json={"device_id": "agri_x", "relay_state": True})
+    assert r.status_code == 200
+    assert reg.get_device("agri_x").state["light"] is True
+
+    r = client.post("/node/heartbeat", json={"device_id": "agri_x"})
+    assert r.status_code == 200
+
+    r = client.get("/node/command/agri_x")
+    assert r.status_code == 200
+    assert r.json() == {}
+
+    reg.enqueue_hub_command("agri_x", "on")
+    r = client.get("/node/command/agri_x")
+    assert r.json() == {"command": "on", "slot": 0}
+
+    r = client.post("/node/register", json={"device_id": "y", "sensor_type": 99})
+    assert r.status_code == 400
