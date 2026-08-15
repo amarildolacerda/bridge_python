@@ -11,6 +11,7 @@ from app.mqtt_discovery import MQTTDiscovery
 from app.udp_discovery import UDPDiscovery
 from app.mdns_discovery import MDNSDiscovery
 from app.websocket_manager import WebSocketManager
+from app.hub_compat import translate_ha_payload, device_id_from_command_topic
 
 LOG = logging.getLogger(__name__)
 
@@ -85,6 +86,31 @@ async def force_update_listener():
             await asyncio.sleep(10)
 
 
+async def hub_command_listener():
+    import aiomqtt
+    while True:
+        try:
+            async with aiomqtt.Client(
+                hostname=settings.mqtt_host,
+                port=settings.mqtt_port,
+                username=settings.mqtt_user or None,
+                password=settings.mqtt_pass or None,
+            ) as client:
+                await client.subscribe("homeassistant/+/+/+/set")
+                async for message in client.messages:
+                    topic = str(message.topic)
+                    payload = message.payload.decode().strip() if message.payload else ""
+                    cmd = translate_ha_payload(payload)
+                    if cmd is None:
+                        continue
+                    device_id = device_id_from_command_topic(topic)
+                    if device_id and registry.get_device(device_id):
+                        registry.enqueue_hub_command(device_id, cmd)
+        except Exception:
+            LOG.exception("hub command listener error, retrying in 10s")
+            await asyncio.sleep(10)
+
+
 async def startup():
     registry.load()
     LOG.info("Loaded %d devices from persistence", len(registry.get_all()))
@@ -97,6 +123,7 @@ async def startup():
     asyncio.create_task(heartbeat_monitor())
     asyncio.create_task(mqtt_state_sync())
     asyncio.create_task(force_update_listener())
+    asyncio.create_task(hub_command_listener())
 
 
 @app.on_event("startup")

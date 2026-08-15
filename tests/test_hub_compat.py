@@ -130,3 +130,65 @@ def test_node_endpoints(tmp_path):
 
     r = client.post("/node/register", json={"device_id": "y", "sensor_type": 99})
     assert r.status_code == 400
+
+
+import asyncio
+import sys
+import app.main as main_module
+
+
+class _FakeMsg:
+    def __init__(self, topic, payload):
+        self.topic = topic
+        self.payload = payload
+
+
+class _FakeClient:
+    def __init__(self, msgs):
+        self._msgs = msgs
+        self.subscribed = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def subscribe(self, topic):
+        self.subscribed.append(topic)
+
+    @property
+    def messages(self):
+        async def gen():
+            for m in self._msgs:
+                yield m
+            raise RuntimeError("end of test stream")
+        return gen()
+
+
+class _FakeMQTT:
+    def __init__(self, msgs):
+        self._msgs = msgs
+
+    def Client(self, **kwargs):
+        return _FakeClient(self._msgs)
+
+
+@pytest.mark.asyncio
+async def test_hub_command_listener_enqueues(monkeypatch):
+    fake = _FakeMQTT([_FakeMsg("homeassistant/light/agri_x/light/set", b"true")])
+    monkeypatch.setitem(sys.modules, "aiomqtt", fake)
+    calls = []
+    monkeypatch.setattr(main_module.registry, "get_device", lambda d: d == "agri_x")
+    monkeypatch.setattr(
+        main_module.registry, "enqueue_hub_command",
+        lambda d, c: calls.append((d, c)) or True,
+    )
+    task = asyncio.create_task(main_module.hub_command_listener())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    assert calls == [("agri_x", "on")]
