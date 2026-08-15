@@ -14,6 +14,7 @@ LOG = logging.getLogger(__name__)
 class DeviceRegistry:
     def __init__(self, data_dir: str = "data"):
         self._devices: dict[str, BridgedDevice] = {}
+        self._hub_commands: dict[str, list[str]] = {}
         self._data_dir = data_dir
         self._file_path = os.path.join(data_dir, "devices.json")
         self._last_cleanup = time.time()
@@ -92,6 +93,27 @@ class DeviceRegistry:
         cmds = list(dev.commands)
         dev.commands.clear()
         return cmds
+
+    def enqueue_hub_command(self, device_id: str, cmd: str) -> bool:
+        if device_id not in self._devices:
+            return False
+        q = self._hub_commands.setdefault(device_id, [])
+        q.append(cmd)
+        while len(q) > 10:
+            q.pop(0)
+        return True
+
+    def get_hub_command(self, device_id: str) -> str | None:
+        q = self._hub_commands.get(device_id)
+        if not q:
+            return None
+        return q.pop(0)
+
+    def slot_of(self, device_id: str) -> int:
+        for i, d in enumerate(self.get_all()):
+            if d.id == device_id:
+                return i
+        return -1
 
     def get_device(self, device_id: str) -> BridgedDevice | None:
         return self._devices.get(device_id)
