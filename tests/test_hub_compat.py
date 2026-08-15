@@ -1,3 +1,4 @@
+import pytest
 from app.models import DeviceType
 from app.mqtt_discovery import DEVICE_ENTITY_MAP
 
@@ -33,3 +34,60 @@ def test_hub_command_queue_cap(tmp_path):
         reg.enqueue_hub_command("agri_cap", f"c{i}")
     # cap em 10: os 5 primeiros foram descartados
     assert reg.get_hub_command("agri_cap") == "c5"
+
+
+from unittest.mock import AsyncMock
+from app import hub_compat
+
+
+@pytest.mark.asyncio
+async def test_register_state_command_cycle(tmp_path):
+    reg = DeviceRegistry(data_dir=str(tmp_path))
+    reg.load()
+    mqtt = AsyncMock()
+    ws = AsyncMock()
+    resp, code = await hub_compat.handle_node_register(
+        reg, mqtt, ws,
+        {"device_id": "agri_abc", "sensor_type": 9, "device_name": "Lamp"},
+    )
+    assert code == 200
+    assert resp["assigned_slot"] == 0
+    assert resp["device_id"] == "agri_abc"
+    mqtt.publish_device_config.assert_awaited_once()
+
+    resp, code = await hub_compat.handle_node_state(
+        reg, ws,
+        {"device_id": "agri_abc", "relay_state": True, "ip": "1.2.3.4"},
+    )
+    assert code == 200
+    dev = reg.get_device("agri_abc")
+    assert dev.state["light"] is True
+    assert dev.ip == "1.2.3.4"
+
+    reg.enqueue_hub_command("agri_abc", "on")
+    resp, code = await hub_compat.handle_node_command_get(reg, "agri_abc")
+    assert code == 200
+    assert resp == {"command": "on", "slot": 0}
+
+    resp, code = await hub_compat.handle_node_command_get(reg, "agri_abc")
+    assert resp == {}
+
+
+@pytest.mark.asyncio
+async def test_invalid_sensor_type(tmp_path):
+    reg = DeviceRegistry(data_dir=str(tmp_path))
+    reg.load()
+    resp, code = await hub_compat.handle_node_register(
+        reg, None, None, {"device_id": "x", "sensor_type": 99}
+    )
+    assert code == 400
+
+
+def test_translate_and_topic():
+    assert hub_compat.translate_ha_payload("true") == "on"
+    assert hub_compat.translate_ha_payload("FALSE") == "off"
+    assert hub_compat.translate_ha_payload("on") == "on"
+    assert hub_compat.translate_ha_payload("bogus") is None
+    assert hub_compat.device_id_from_command_topic("homeassistant/light/agri_x/light/set") == "agri_x"
+    assert hub_compat.device_id_from_command_topic("homeassistant/switch/agri_x/power/set") == "agri_x"
+    assert hub_compat.device_id_from_command_topic("esp32-bridge/force_update/set") is None
