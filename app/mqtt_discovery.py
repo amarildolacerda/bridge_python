@@ -11,6 +11,7 @@ DISCOVERY_PREFIX = "homeassistant"
 # Maps device type to list of (entity_name, platform, unit, device_class, icon)
 DEVICE_ENTITY_MAP: dict[DeviceType, list[tuple[str, str, str, str, str]]] = {
     DeviceType.ONOFF: [("power", "switch", "", "", "")],
+    DeviceType.LIGHT: [("light", "light", "", "", "")],
     DeviceType.DIMMABLE: [("light", "light", "", "", "")],
     DeviceType.TEMPERATURE: [
         ("temperature", "sensor", "°C", "temperature", ""),
