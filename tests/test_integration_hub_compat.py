@@ -1,11 +1,10 @@
-# tests/test_hub_integration.py
+# tests/test_integration_hub_compat.py
 from unittest.mock import AsyncMock
 from app.device_registry import DeviceRegistry
-from app.models import DeviceType
 from app import hub_compat
 
 
-async def _cycle(tmp_path, sensor_type, relay_key, relay_val):
+async def _cycle(tmp_path, sensor_type, relay_key, relay_val, state_key, state_val):
     reg = DeviceRegistry(data_dir=str(tmp_path))
     reg.load()
     mqtt = AsyncMock()
@@ -14,12 +13,14 @@ async def _cycle(tmp_path, sensor_type, relay_key, relay_val):
     resp, code = await hub_compat.handle_node_register(
         reg, mqtt, ws, {"device_id": did, "sensor_type": sensor_type, "device_name": "Lamp"}
     )
-    assert code == 200 and resp["assigned_slot"] == 0
+    assert code == 200
+    assert resp["assigned_slot"] == 0
     resp, code = await hub_compat.handle_node_state(
         reg, ws, {"device_id": did, relay_key: relay_val, "ip": "192.168.1.20"}
     )
     assert code == 200
     dev = reg.get_device(did)
+    assert dev.state[state_key] is state_val
     assert dev.ip == "192.168.1.20"
     # HA liga
     cmd = hub_compat.translate_ha_payload("true")
@@ -32,11 +33,9 @@ async def _cycle(tmp_path, sensor_type, relay_key, relay_val):
     assert resp == {}
 
 
-def test_lamp_light_cycle(tmp_path):
-    import asyncio
-    asyncio.run(_cycle(tmp_path, 9, "relay_state", True))
+async def test_lamp_light_cycle(tmp_path):
+    await _cycle(tmp_path, 9, "relay_state", True, "light", True)
 
 
-def test_onoff_switch_cycle(tmp_path):
-    import asyncio
-    asyncio.run(_cycle(tmp_path, 8, "state", False))
+async def test_onoff_switch_cycle(tmp_path):
+    await _cycle(tmp_path, 8, "state", False, "power", False)
